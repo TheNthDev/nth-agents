@@ -1,0 +1,25 @@
+[package]
+name = "agents"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix = "0.13"
+actix-web = "4"
+actix-files = "0.6"
+actix-telepathy = "0.6"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+futures-util = "0.3"
+log = "0.4"
+# ZeroClaw dependency (pointing to GitHub as it's not on crates.io yet)
+zeroclaw = { git = "https://github.com/zeroclaw-labs/zeroclaw.git" }
+async-trait = "0.1"
+reqwest = { version = "0.12", features = ["json"] }
+dotenvy = "0.15"
+urlencoding = "2.1.3"

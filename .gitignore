@@ -1,0 +1,8 @@
+/target
+/.env
+/memory
+**/*.rs.bk
+.idea/
+.vscode/
+/.output.txt
+/memory/
