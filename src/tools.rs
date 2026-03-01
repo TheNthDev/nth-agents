@@ -5,7 +5,15 @@ use anyhow::Result;
 use urlencoding::encode;
 
 /// A simple weather tool to demonstrate LLM tool integration
-pub struct WeatherTool;
+pub struct WeatherTool {
+    api_key: Option<String>,
+}
+
+impl WeatherTool {
+    pub fn new(api_key: Option<String>) -> Self {
+        Self { api_key }
+    }
+}
 
 #[async_trait]
 impl tools::Tool for WeatherTool {
@@ -37,8 +45,10 @@ impl tools::Tool for WeatherTool {
         
         info!("[TOOL_CALL] WeatherTool for city: {}", city);
         
-        // Check for OpenWeatherMap API key
-        if let Ok(api_key) = std::env::var("OPENWEATHERMAP_API_KEY") {
+        // Use user-provided API key if available, otherwise check environment
+        let api_key = self.api_key.clone().or_else(|| std::env::var("OPENWEATHERMAP_API_KEY").ok());
+
+        if let Some(api_key) = api_key {
             // Geocoding step (OWM 3.0 recommends using lat/lon)
             let geo_url = format!("https://api.openweathermap.org/geo/1.0/direct?q={}&limit=1&appid={}", encode(city), api_key);
             
@@ -49,8 +59,8 @@ impl tools::Tool for WeatherTool {
                         let lat = location["lat"].as_f64().unwrap_or(0.0);
                         let lon = location["lon"].as_f64().unwrap_or(0.0);
                         
-                        // OWM 3.0 One Call API
-                        let url = format!("https://api.openweathermap.org/data/2.5/onecall?lat={}&lon={}&exclude=minutely,hourly,daily,alerts&units=metric&appid={}", lat, lon, api_key);
+                        // OWM Current Weather API
+                        let url = format!("https://api.openweathermap.org/data/2.5/weather?lat={}&lon={}&units=metric&appid={}", lat, lon, api_key);
                         
                         // Log a masked version for debugging
                         let masked_key = if api_key.len() > 8 {
@@ -58,7 +68,7 @@ impl tools::Tool for WeatherTool {
                         } else {
                             "****".to_string()
                         };
-                        info!("[TOOL_DEBUG] Calling OpenWeatherMap 3.0 API: https://api.openweathermap.org/data/3.0/onecall?lat={}&lon={}&appid={}", lat, lon, masked_key);
+                        info!("[TOOL_DEBUG] Calling OpenWeatherMap 2.5 API: https://api.openweathermap.org/data/2.5/weather?lat={}&lon={}&appid={}", lat, lon, masked_key);
 
                         match reqwest::get(&url).await {
                             Ok(resp) => {
@@ -66,8 +76,8 @@ impl tools::Tool for WeatherTool {
                                 if status.is_success() {
                                     match resp.json::<serde_json::Value>().await {
                                         Ok(json) => {
-                                            let temp = json["current"]["temp"].as_f64().unwrap_or(0.0);
-                                            let description = json["current"]["weather"][0]["description"].as_str().unwrap_or("unknown");
+                                            let temp = json["main"]["temp"].as_f64().unwrap_or(0.0);
+                                            let description = json["weather"][0]["description"].as_str().unwrap_or("unknown");
                                             info!("[TOOL_SUCCESS] WeatherTool result: {}°C, {}", temp, description);
                                             return Ok(tools::ToolResult {
                                                 success: true,

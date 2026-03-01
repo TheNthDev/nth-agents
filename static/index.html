@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ZeroClaw AI Agent Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
             --primary: #4a90e2;
@@ -11,6 +12,10 @@
             --text: #333;
             --white: #ffffff;
             --border: #ddd;
+            --thought-bg: #fdf6e3;
+            --thought-border: #eee8d5;
+            --code-bg: #2d2d2d;
+            --code-text: #ccc;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -19,7 +24,7 @@
             margin: 0;
             display: flex;
             flex-direction: column;
-            height: 100vh;
+            min-height: 100vh;
         }
         header {
             background-color: var(--white);
@@ -30,20 +35,21 @@
             align-items: center;
         }
         .container {
-            flex: 1;
             display: flex;
             flex-direction: column;
-            max-width: 800px;
+            max-width: 900px;
             margin: 2rem auto;
             width: 100%;
             background: var(--white);
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            overflow: hidden;
         }
-        #login-view {
+        #login-view, #config-view {
             padding: 2rem;
             text-align: center;
+        }
+        #config-view {
+            display: none;
         }
         .form-group {
             margin-bottom: 1rem;
@@ -75,22 +81,24 @@
         #chat-view {
             display: none;
             flex-direction: column;
-            height: 100%;
+            min-height: 600px;
         }
         .messages {
             flex: 1;
-            overflow-y: auto;
             padding: 1.5rem;
             border-bottom: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 1.5rem;
+            height: 500px;
+            overflow-y: auto;
         }
         .message {
-            max-width: 80%;
-            padding: 0.8rem 1rem;
+            max-width: 90%;
+            padding: 1rem;
             border-radius: 1rem;
-            line-height: 1.4;
+            line-height: 1.5;
+            position: relative;
         }
         .message.user {
             align-self: flex-end;
@@ -100,32 +108,133 @@
         }
         .message.agent {
             align-self: flex-start;
-            background-color: #e9ecef;
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
             border-bottom-left-radius: 0.2rem;
         }
-        .input-area {
+        .message .timestamp {
+            display: block;
+            font-size: 0.7rem;
+            margin-top: 0.5rem;
+            opacity: 0.7;
+        }
+        .message.user .timestamp {
+            text-align: right;
+            color: #eee;
+        }
+        .message.agent .timestamp {
+            text-align: left;
+            color: #666;
+        }
+        
+        /* Markdown Styling */
+        .message-content {
+            word-wrap: break-word;
+        }
+        .message-content p:first-child { margin-top: 0; }
+        .message-content p:last-child { margin-bottom: 0; }
+        
+        .message-content h1, .message-content h2, .message-content h3, 
+        .message-content h4, .message-content h5, .message-content h6 {
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .message-content ul, .message-content ol {
+            padding-left: 1.5rem;
+        }
+        
+        .message-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1rem 0;
+        }
+        
+        .message-content th, .message-content td {
+            border: 1px solid var(--border);
+            padding: 0.5rem;
+            text-align: left;
+        }
+        
+        .message-content blockquote {
+            border-left: 4px solid var(--border);
+            margin: 1rem 0;
+            padding-left: 1rem;
+            color: #666;
+        }
+
+        /* Formatting types */
+        .thought-block {
+            background-color: var(--thought-bg);
+            border: 1px solid var(--thought-border);
+            border-radius: 6px;
+            padding: 0.8rem;
+            margin: 0.5rem 0;
+            font-style: italic;
+            color: #657b83;
+            font-size: 0.95rem;
+        }
+        .thought-block::before {
+            content: "Thought Process";
+            display: block;
+            font-weight: bold;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+            color: #93a1a1;
+            font-style: normal;
+        }
+        
+        pre {
+            background-color: var(--code-bg);
+            color: var(--code-text);
             padding: 1rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 0.8rem 0;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 0.9rem;
+        }
+        
+        code {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            background-color: rgba(0,0,0,0.05);
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        
+        pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+
+        .input-area {
+            padding: 1.5rem;
             display: flex;
-            gap: 0.5rem;
+            gap: 0.8rem;
         }
         input[type="text"] {
             flex: 1;
-            padding: 0.8rem;
+            padding: 0.8rem 1rem;
             border: 1px solid var(--border);
-            border-radius: 4px;
+            border-radius: 25px;
             outline: none;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
         }
         button {
             padding: 0.8rem 1.5rem;
             background-color: var(--primary);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 25px;
             cursor: pointer;
             font-weight: 600;
+            transition: all 0.2s;
         }
         button:hover {
             opacity: 0.9;
+            transform: translateY(-1px);
         }
         #user-info {
             font-weight: bold;
@@ -137,20 +246,30 @@
         <h1>ZeroClaw Agents</h1>
         <div id="user-display">
             <span id="user-info"></span>
+            <button id="config-btn" style="display:none; margin-left:1rem; padding: 0.4rem 0.8rem;">Settings</button>
             <button id="logout-btn" style="display:none; margin-left:1rem; padding: 0.4rem 0.8rem;">Logout</button>
         </div>
     </header>
 
     <div class="container">
         <div id="login-view">
-            <h2>Sign Up / Sign In</h2>
-            <p>Configure your agent and enter a User ID to start.</p>
+            <h2>Welcome</h2>
+            <p>Enter your User ID to start.</p>
             
             <div class="form-group">
                 <label for="user-id-input">User ID</label>
                 <input type="text" id="user-id-input" placeholder="e.g., alice">
             </div>
 
+            <div style="margin-top: 2rem;">
+                <button id="login-btn">Continue</button>
+            </div>
+        </div>
+
+        <div id="config-view">
+            <h2 id="config-title">Configure Your Agent</h2>
+            <p id="config-subtitle">Set up your AI provider and tools.</p>
+            
             <div class="form-group">
                 <label for="provider-select">AI Provider</label>
                 <select id="provider-select">
@@ -172,6 +291,12 @@
                 <input type="text" id="base-url-input" value="http://localhost:1234/v1" placeholder="e.g., http://localhost:1234/v1">
             </div>
 
+            <div class="form-group" id="llm-key-group">
+                <label for="llm-key-input">LLM API Key (Optional)</label>
+                <input type="password" id="llm-key-input" placeholder="Enter your API key">
+                <small style="color: #666;">Leave blank to use system default.</small>
+            </div>
+
             <div class="form-group">
                 <label>Available Tools</label>
                 <div class="checkbox-group">
@@ -180,8 +305,15 @@
                 </div>
             </div>
 
+            <div class="form-group" id="weather-key-group">
+                <label for="weather-key-input">Weather API Key (Optional)</label>
+                <input type="password" id="weather-key-input" placeholder="OpenWeatherMap API Key">
+                <small style="color: #666;">Only needed if Weather Tool is enabled.</small>
+            </div>
+
             <div style="margin-top: 2rem;">
-                <button id="login-btn">Start Session</button>
+                <button id="save-config-btn">Save Configuration</button>
+                <button id="cancel-config-btn" style="background-color: #ccc; margin-left: 1rem;">Cancel</button>
             </div>
         </div>
 
@@ -198,10 +330,14 @@
 
     <script>
         const loginView = document.getElementById('login-view');
+        const configView = document.getElementById('config-view');
         const chatView = document.getElementById('chat-view');
         const userIdInput = document.getElementById('user-id-input');
         const loginBtn = document.getElementById('login-btn');
+        const saveConfigBtn = document.getElementById('save-config-btn');
+        const cancelConfigBtn = document.getElementById('cancel-config-btn');
         const logoutBtn = document.getElementById('logout-btn');
+        const configBtn = document.getElementById('config-btn');
         const userInfo = document.getElementById('user-info');
         const chatForm = document.getElementById('chat-form');
         const messageInput = document.getElementById('message-input');
@@ -212,6 +348,11 @@
         const toolWeather = document.getElementById('tool-weather');
         const baseUrlInput = document.getElementById('base-url-input');
         const baseUrlGroup = document.getElementById('base-url-group');
+        const llmKeyInput = document.getElementById('llm-key-input');
+        const weatherKeyInput = document.getElementById('weather-key-input');
+        const weatherKeyGroup = document.getElementById('weather-key-group');
+        const configTitle = document.getElementById('config-title');
+        const configSubtitle = document.getElementById('config-subtitle');
 
         providerSelect.addEventListener('change', () => {
             if (providerSelect.value === 'lmstudio') {
@@ -224,45 +365,115 @@
             }
         });
 
+        toolWeather.addEventListener('change', () => {
+            weatherKeyGroup.style.display = toolWeather.checked ? 'block' : 'none';
+        });
+
         let currentUserId = null;
 
         loginBtn.addEventListener('click', async () => {
             const userId = userIdInput.value.trim();
             if (!userId) return;
 
-            const config = {
-                provider: providerSelect.value === 'lmstudio' ? 'openai' : providerSelect.value,
-                model: modelInput.value.trim(),
-                tools: [],
-                base_url: providerSelect.value === 'lmstudio' ? baseUrlInput.value.trim() : null
-            };
-            if (toolWeather.checked) config.tools.push('weather');
-
             try {
-                const response = await fetch(`/signup/${userId}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(config)
-                });
-
-                if (response.ok || response.status === 409) {
-                    // 409 means user already exists, which is fine for "logging in"
+                // Check if user exists
+                const response = await fetch(`/agent/${userId}/check`);
+                if (response.ok) {
+                    // User exists, just start session
                     startSession(userId);
+                } else if (response.status === 404) {
+                    // User doesn't exist, show config view
+                    currentUserId = userId;
+                    showConfigView(false);
                 } else {
-                    const error = await response.text();
-                    alert(`Signup failed: ${error}`);
+                    alert(`Error checking user: ${await response.text()}`);
                 }
             } catch (err) {
                 alert(`Connection error: ${err.message}`);
             }
         });
 
+        async function showConfigView(isEditing = false) {
+            loginView.style.display = 'none';
+            chatView.style.display = 'none';
+            configView.style.display = 'block';
+            configBtn.style.display = 'none';
+            logoutBtn.style.display = 'none';
+
+            if (isEditing) {
+                configTitle.textContent = "Edit Configuration";
+                configSubtitle.textContent = "Modify your AI provider and tools.";
+                cancelConfigBtn.style.display = 'inline-block';
+                
+                // Fetch current config
+                try {
+                    const response = await fetch(`/agent/${currentUserId}/config`);
+                    if (response.ok) {
+                        const config = await response.json();
+                        providerSelect.value = config.provider === 'openai' && config.base_url ? 'lmstudio' : config.provider;
+                        modelInput.value = config.model;
+                        baseUrlInput.value = config.base_url || 'http://localhost:1234/v1';
+                        llmKeyInput.value = config.llm_api_key || '';
+                        weatherKeyInput.value = config.weather_api_key || '';
+                        toolWeather.checked = config.tools.includes('weather');
+                        providerSelect.dispatchEvent(new Event('change'));
+                        toolWeather.dispatchEvent(new Event('change'));
+                    }
+                } catch (err) {
+                    console.error('Failed to load config:', err);
+                }
+            } else {
+                configTitle.textContent = "Configure Your Agent";
+                configSubtitle.textContent = "Set up your AI provider and tools.";
+                cancelConfigBtn.style.display = 'none';
+            }
+        }
+
+        saveConfigBtn.addEventListener('click', async () => {
+            const config = {
+                provider: providerSelect.value === 'lmstudio' ? 'openai' : providerSelect.value,
+                model: modelInput.value.trim(),
+                tools: [],
+                base_url: providerSelect.value === 'lmstudio' ? baseUrlInput.value.trim() : null,
+                llm_api_key: llmKeyInput.value.trim() || null,
+                weather_api_key: weatherKeyInput.value.trim() || null
+            };
+            if (toolWeather.checked) config.tools.push('weather');
+
+            try {
+                const response = await fetch(`/agent/${currentUserId}/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (response.ok) {
+                    startSession(currentUserId);
+                } else {
+                    const errorMsg = await response.text();
+                    alert(`Configuration failed: ${errorMsg}\n\nTip: If you're using a provider that requires an API key (like OpenAI or Anthropic), make sure it's set in the .env file. Otherwise, try using the 'Synthetic (Mock)' provider.`);
+                }
+            } catch (err) {
+                alert(`Connection error: ${err.message}`);
+            }
+        });
+
+        cancelConfigBtn.addEventListener('click', () => {
+            startSession(currentUserId);
+        });
+
+        configBtn.addEventListener('click', () => {
+            showConfigView(true);
+        });
+
         logoutBtn.addEventListener('click', () => {
             currentUserId = null;
             userInfo.textContent = '';
             logoutBtn.style.display = 'none';
+            configBtn.style.display = 'none';
             loginView.style.display = 'block';
             chatView.style.display = 'none';
+            configView.style.display = 'none';
             messagesContainer.innerHTML = '<div class="message agent">Hello! I am your AI agent. How can I help you today?</div>';
         });
 
@@ -271,7 +482,8 @@
             const message = messageInput.value.trim();
             if (!message || !currentUserId) return;
 
-            addMessage(message, 'user');
+            const userTimestamp = new Date().toLocaleString();
+            addMessage(message, 'user', userTimestamp);
             messageInput.value = '';
 
             try {
@@ -282,8 +494,8 @@
                 });
 
                 if (response.ok) {
-                    const reply = await response.text();
-                    addMessage(reply, 'agent');
+                    const data = await response.json();
+                    addMessage(data.content, 'agent', data.timestamp);
                 } else {
                     const error = await response.text();
                     addMessage(`Error: ${error}`, 'agent');
@@ -297,7 +509,9 @@
             currentUserId = userId;
             userInfo.textContent = `User: ${userId}`;
             logoutBtn.style.display = 'inline-block';
+            configBtn.style.display = 'inline-block';
             loginView.style.display = 'none';
+            configView.style.display = 'none';
             chatView.style.display = 'flex';
 
             // Load history
@@ -308,10 +522,7 @@
                     if (history && history.length > 0) {
                         messagesContainer.innerHTML = '';
                         history.forEach(msg => {
-                            // Basic heuristic to distinguish user vs agent messages in history
-                            // Since the actor returns strings from agent.history(), 
-                            // we'll display them. In a real app, history would include roles.
-                            addMessage(msg, 'agent'); 
+                            addMessage(msg.content, msg.role, msg.timestamp); 
                         });
                     }
                 }
@@ -320,12 +531,60 @@
             }
         }
 
-        function addMessage(text, role) {
+        function addMessage(text, role, timestamp) {
             const div = document.createElement('div');
             div.className = `message ${role}`;
-            div.textContent = text;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            // Parse message for formatting
+            parseAndAppendContent(contentDiv, text);
+            div.appendChild(contentDiv);
+            
+            if (timestamp) {
+                const tsSpan = document.createElement('span');
+                tsSpan.className = 'timestamp';
+                tsSpan.textContent = timestamp;
+                tsSpan.title = timestamp;
+                div.appendChild(tsSpan);
+            }
+            
             messagesContainer.appendChild(div);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function parseAndAppendContent(container, text) {
+            // Regex for thoughts
+            const thoughtRegex = /<(?:thought|thinking)>([\s\S]*?)<\/(?:thought|thinking)>/g;
+
+            let currentPos = 0;
+            let match;
+
+            while ((match = thoughtRegex.exec(text)) !== null) {
+                // Markdown content before the thought
+                if (match.index > currentPos) {
+                    const markdown = text.substring(currentPos, match.index);
+                    const mdDiv = document.createElement('div');
+                    mdDiv.innerHTML = marked.parse(markdown);
+                    container.appendChild(mdDiv);
+                }
+
+                // The thought block
+                const thoughtDiv = document.createElement('div');
+                thoughtDiv.className = 'thought-block';
+                thoughtDiv.textContent = match[1].trim();
+                container.appendChild(thoughtDiv);
+
+                currentPos = thoughtRegex.lastIndex;
+            }
+
+            // Remaining content as markdown
+            if (currentPos < text.length) {
+                const markdown = text.substring(currentPos);
+                const mdDiv = document.createElement('div');
+                mdDiv.innerHTML = marked.parse(markdown);
+                container.appendChild(mdDiv);
+            }
         }
     </script>
 </body>

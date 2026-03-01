@@ -19,15 +19,16 @@ The application uses `actix-telepathy` to enable cluster-wide communication:
 
 ### 3. Web API
 An **Actix-web** server (`src/main.rs`) provides the entry point for users:
-- `POST /agent/{user_id}/turn`: Sends a message to a specific user's agent.
-- Routes requests to the appropriate `UserAgentActor` address.
+- `POST /agent/{user_id}/turn`: Sends a message to a specific user's agent. **MANDATORY**: This endpoint must return the agent's actual reply synchronously in the HTTP response.
+- `GET /agent/{user_id}/history`: Returns the conversation history for a user.
+- Routes requests to a local `UserAgentActor` instance. To ensure the synchronous response contract, HTTP handlers should prioritize local actor execution, relying on shared persistent storage and config-sensitive namespacing for consistency across nodes.
 
 ## ZeroClaw Integration
 
 The project integrates `zeroclaw` as a core dependency. The `UserAgentActor` is responsible for:
 - Initializing the agent with the required providers (e.g., OpenAI, Anthropic). Supports `AGENT_PROVIDER` and `AGENT_MODEL` environment variables.
 - Managing the `AgentTurn` lifecycle.
-- Handling responses and tool calls from the LLM.
+- Ensuring the turn response is awaited and returned to the caller. **NEVER** return a "routed" stub message in the HTTP path; if the actor is remote, the system must either use a local fallback or a remote request-response pattern (e.g., via `actix-telepathy` with a response channel) to get the actual content.
 - Implementing custom tools (e.g., `WeatherTool`) to extend agent capabilities. The `WeatherTool` supports real-time data via the OpenWeatherMap API when `OPENWEATHERMAP_API_KEY` is set.
 
 ## Scaling Strategy
