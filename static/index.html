@@ -250,6 +250,7 @@
             </label>
             <span id="user-info"></span>
             <button id="config-btn" style="display:none; margin-left:1rem; padding: 0.4rem 0.8rem;">Settings</button>
+            <button id="clear-history-btn" style="display:none; margin-left:1rem; padding: 0.4rem 0.8rem; background-color: #e74c3c;">Clear History</button>
             <button id="logout-btn" style="display:none; margin-left:1rem; padding: 0.4rem 0.8rem;">Logout</button>
         </div>
     </header>
@@ -279,6 +280,7 @@
                     <option value="openai">OpenAI</option>
                     <option value="anthropic">Anthropic</option>
                     <option value="gemini">Google Gemini</option>
+                    <option value="xai">xAI (Grok)</option>
                     <option value="lmstudio">LMStudio (Local)</option>
                     <option value="synthetic">Synthetic (Mock)</option>
                 </select>
@@ -305,6 +307,34 @@
                 <div class="checkbox-group">
                     <input type="checkbox" id="tool-weather" checked>
                     <label for="tool-weather">Weather Tool</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-file-read">
+                    <label for="tool-file-read">File Read</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-file-write">
+                    <label for="tool-file-write">File Write</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-file-list">
+                    <label for="tool-file-list">File List</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-git">
+                    <label for="tool-git">Git</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-terminal">
+                    <label for="tool-terminal">Terminal</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-workspace">
+                    <label for="tool-workspace">Workspace</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-code-run">
+                    <label for="tool-code-run">Code Run</label>
                 </div>
             </div>
 
@@ -340,6 +370,7 @@
         const saveConfigBtn = document.getElementById('save-config-btn');
         const cancelConfigBtn = document.getElementById('cancel-config-btn');
         const logoutBtn = document.getElementById('logout-btn');
+        const clearHistoryBtn = document.getElementById('clear-history-btn');
         const configBtn = document.getElementById('config-btn');
         const userInfo = document.getElementById('user-info');
         const chatForm = document.getElementById('chat-form');
@@ -349,6 +380,13 @@
         const providerSelect = document.getElementById('provider-select');
         const modelInput = document.getElementById('model-input');
         const toolWeather = document.getElementById('tool-weather');
+        const toolFileRead = document.getElementById('tool-file-read');
+        const toolFileWrite = document.getElementById('tool-file-write');
+        const toolFileList = document.getElementById('tool-file-list');
+        const toolGit = document.getElementById('tool-git');
+        const toolTerminal = document.getElementById('tool-terminal');
+        const toolWorkspace = document.getElementById('tool-workspace');
+        const toolCodeRun = document.getElementById('tool-code-run');
         const baseUrlInput = document.getElementById('base-url-input');
         const baseUrlGroup = document.getElementById('base-url-group');
         const llmKeyInput = document.getElementById('llm-key-input');
@@ -369,6 +407,9 @@
                 if (!modelInput.value || modelInput.value === 'gpt-4o') {
                     modelInput.value = 'local-model';
                 }
+            } else if (providerSelect.value === 'xai') {
+                baseUrlGroup.style.display = 'none';
+                modelInput.value = 'grok-beta';
             } else {
                 baseUrlGroup.style.display = 'none';
             }
@@ -425,6 +466,13 @@
                         llmKeyInput.value = config.llm_api_key || '';
                         weatherKeyInput.value = config.weather_api_key || '';
                         toolWeather.checked = config.tools.includes('weather');
+                        toolFileRead.checked = config.tools.includes('file_read');
+                        toolFileWrite.checked = config.tools.includes('file_write');
+                        toolFileList.checked = config.tools.includes('file_list');
+                        toolGit.checked = config.tools.includes('git');
+                        toolTerminal.checked = config.tools.includes('terminal');
+                        toolWorkspace.checked = config.tools.includes('workspace');
+                        toolCodeRun.checked = config.tools.includes('code_run');
                         providerSelect.dispatchEvent(new Event('change'));
                         toolWeather.dispatchEvent(new Event('change'));
                     }
@@ -448,6 +496,13 @@
                 weather_api_key: weatherKeyInput.value.trim() || null
             };
             if (toolWeather.checked) config.tools.push('weather');
+            if (toolFileRead.checked) config.tools.push('file_read');
+            if (toolFileWrite.checked) config.tools.push('file_write');
+            if (toolFileList.checked) config.tools.push('file_list');
+            if (toolGit.checked) config.tools.push('git');
+            if (toolTerminal.checked) config.tools.push('terminal');
+            if (toolWorkspace.checked) config.tools.push('workspace');
+            if (toolCodeRun.checked) config.tools.push('code_run');
 
             try {
                 const response = await fetch(`/agent/${currentUserId}/config`, {
@@ -485,11 +540,37 @@
             userInfo.textContent = '';
             logoutBtn.style.display = 'none';
             configBtn.style.display = 'none';
+            clearHistoryBtn.style.display = 'none';
             streamToggle.style.display = 'none';
             loginView.style.display = 'block';
             chatView.style.display = 'none';
             configView.style.display = 'none';
             messagesContainer.innerHTML = '<div class="message agent">Hello! I am your AI agent. How can I help you today?</div>';
+        });
+
+        clearHistoryBtn.addEventListener('click', async () => {
+            if (!currentUserId) return;
+            
+            if (!confirm('Are you sure you want to clear your conversation history? This cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/agent/${currentUserId}/history`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    // Clear the UI messages
+                    messagesContainer.innerHTML = '<div class="message agent">History cleared. How can I help you today?</div>';
+                    alert('Conversation history has been cleared.');
+                } else {
+                    const errorMsg = await response.text();
+                    alert(`Failed to clear history: ${errorMsg}`);
+                }
+            } catch (err) {
+                alert(`Connection error: ${err.message}`);
+            }
         });
 
         streamCheckbox.addEventListener('change', async () => {
@@ -607,6 +688,7 @@
             userInfo.textContent = `User: ${userId}`;
             logoutBtn.style.display = 'inline-block';
             configBtn.style.display = 'inline-block';
+            clearHistoryBtn.style.display = 'inline-block';
             streamToggle.style.display = 'inline-flex';
             loginView.style.display = 'none';
             configView.style.display = 'none';

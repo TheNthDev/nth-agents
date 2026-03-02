@@ -4,6 +4,9 @@ use zeroclaw::tools;
 use anyhow::Result;
 use urlencoding::encode;
 
+// Import coding tools module
+pub mod coding_tools;
+
 /// A simple weather tool to demonstrate LLM tool integration
 pub struct WeatherTool {
     api_key: Option<String>,

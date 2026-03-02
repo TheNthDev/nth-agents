@@ -52,6 +52,7 @@ async fn run_app() -> std::io::Result<()> {
             .route("/agent/{user_id}/turn", web::post().to(agent_turn))
             .route("/agent/{user_id}/stream", web::get().to(ws_stream))
             .route("/agent/{user_id}/history", web::get().to(crate::handlers::get_history))
+            .route("/agent/{user_id}/history", web::delete().to(crate::handlers::clear_history))
             .service(fs::Files::new("/", "./static").index_file("index.html"))
     })
     .bind(("127.0.0.1", port))?

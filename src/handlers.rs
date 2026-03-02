@@ -1,7 +1,7 @@
 use actix_web::{web, HttpResponse, Responder, HttpRequest, Error};
 use actix_web_actors::ws;
 use tracing::info;
-use crate::actor::{AgentTurn, AgentStreamTurn, UserAgentActor, ConfigureAgent, GetHistory, GetConfig, StreamChunk};
+use crate::actor::{AgentTurn, AgentStreamTurn, UserAgentActor, ConfigureAgent, GetHistory, GetConfig, StreamChunk, ClearHistory};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use actix::prelude::*;
@@ -17,6 +17,7 @@ pub struct SignupRequest {
     pub model: Option<String>,
     pub tools: Vec<String>,
     pub base_url: Option<String>,
+    pub system_prompt: Option<String>,
     pub llm_api_key: Option<String>,
     pub weather_api_key: Option<String>,
 }
@@ -42,6 +43,7 @@ pub async fn signup(
         model: req.model.clone(),
         tools: req.tools.clone(),
         base_url: req.base_url.clone(),
+        system_prompt: req.system_prompt.clone(),
         llm_api_key: req.llm_api_key.clone(),
         weather_api_key: req.weather_api_key.clone(),
     };
@@ -145,6 +147,29 @@ pub async fn check_user(
     }
 }
 
+pub async fn clear_history(
+    user_id: web::Path<String>,
+    data: web::Data<AppState>,
+) -> impl Responder {
+    let user_id = user_id.into_inner();
+    info!("Clearing history for user: {}", user_id);
+
+    let mut actors = data.user_actors.lock().unwrap();
+    let actor_addr = if let Some(addr) = actors.get(&user_id) {
+        addr.clone()
+    } else {
+        let addr = UserAgentActor::new(user_id.clone()).start();
+        actors.insert(user_id.clone(), addr.clone());
+        addr
+    };
+
+    match actor_addr.send(ClearHistory).await {
+        Ok(Ok(_)) => HttpResponse::Ok().body("History cleared"),
+        Ok(Err(e)) => HttpResponse::InternalServerError().body(e.to_string()),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
+}
+
 pub async fn configure_agent(
     user_id: web::Path<String>,
     req: web::Json<SignupRequest>,
@@ -167,6 +192,7 @@ pub async fn configure_agent(
         model: req.model.clone(),
         tools: req.tools.clone(),
         base_url: req.base_url.clone(),
+        system_prompt: req.system_prompt.clone(),
         llm_api_key: req.llm_api_key.clone(),
         weather_api_key: req.weather_api_key.clone(),
     };

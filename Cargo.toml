@@ -19,6 +19,7 @@ futures-util = "0.3"
 log = "0.4"
 # ZeroClaw dependency (pointing to GitHub as it's not on crates.io yet)
 zeroclaw = { git = "https://github.com/zeroclaw-labs/zeroclaw.git" }
+parking_lot = "0.12"
 async-trait = "0.1"
 reqwest = { version = "0.12", features = ["json"] }
 dotenvy = "0.15"

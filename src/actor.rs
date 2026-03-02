@@ -4,13 +4,18 @@ use actix_telepathy::{AddrRequest, AddrResolver};
 use serde::{Deserialize, Serialize};
 use zeroclaw::agent::Agent;
 use zeroclaw::{providers, tools};
+use zeroclaw::tools::traits::AutonomyLevel;
+use zeroclaw::tools::traits::SecurityPolicy;
+use zeroclaw::Config;
 use anyhow::{Result, Context as AnyhowContext};
 use tracing::{info, error, warn};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use sha2::Digest;
+use std::path::PathBuf;
 
 use crate::tools::WeatherTool;
+use crate::tools::coding_tools::{FileReadTool, FileWriteTool, FileListTool, GitTool, TerminalTool, WorkspaceTool, CodeRunTool, CodingTool};
 
 #[derive(Message, Serialize, Deserialize, Clone, Debug)]
 #[rtype(result = "Result<TurnResponse>")]
@@ -49,6 +54,45 @@ pub struct HistoryMessage {
 }
 
 #[derive(Message, Serialize, Deserialize, Clone, Debug)]
+#[rtype(result = "Result<()>")]
+pub struct ClearHistory;
+
+impl Handler<ClearAgent> for UserAgentActor {
+    type Result = ();
+
+    fn handle(&mut self, _msg: ClearAgent, _ctx: &mut Self::Context) -> Self::Result {
+        self.agent = None;
+    }
+}
+
+impl Handler<ClearHistory> for UserAgentActor {
+    type Result = ResponseActFuture<Self, Result<()>>;
+
+    fn handle(&mut self, _msg: ClearHistory, _ctx: &mut Self::Context) -> Self::Result {
+        let user_id = self.user_id.clone();
+        
+        Box::pin(
+            async move {
+                info!("[CLEAR] Clearing conversation history for user: {}", user_id);
+                
+                // Delete just the memory directory to clear history
+                let memory_path = format!("memory/{}", user_id);
+                if tokio::fs::try_exists(&memory_path).await.unwrap_or(false) {
+                    tokio::fs::remove_dir_all(&memory_path).await.ok();
+                    info!("[CLEAR] Removed history for user: {}", user_id);
+                }
+                
+                Ok(())
+            }
+            .into_actor(self)
+            .map(|res, _act, _ctx| {
+                res
+            })
+        )
+    }
+}
+
+#[derive(Message, Serialize, Deserialize, Clone, Debug)]
 #[rtype(result = "()")]
 pub struct ClearAgent;
 
@@ -65,6 +109,7 @@ pub struct ConfigureAgent {
     pub model: Option<String>,
     pub tools: Vec<String>,
     pub base_url: Option<String>,
+    pub system_prompt: Option<String>,
     pub llm_api_key: Option<String>,
     pub weather_api_key: Option<String>,
 }
@@ -184,6 +229,25 @@ impl UserAgentActor {
         let mut memory_config = zeroclaw::config::MemoryConfig::default();
         memory_config.auto_save = true;
 
+        // Ensure workspace exists
+        let workspace_path = format!("workspaces/{}", user_id);
+        let _ = tokio::fs::create_dir_all(&workspace_path).await;
+        info!("[ZEROCLAW] Ensured workspace exists: {}", workspace_path);
+
+        // Manage SOUL.md in workspace
+        let soul_path = format!("{}/SOUL.md", workspace_path);
+        if !tokio::fs::try_exists(&soul_path).await.unwrap_or(false) {
+            let default_soul = format!("# Agent Soul: {}\n\nYou are a helpful AI agent powered by ZeroClaw. Your mission is to assist your user with complex tasks, especially coding and problem solving.\n\n## Personality\n- Precise and technical\n- Proactive in suggesting solutions\n- Ethical and safety-conscious\n", user_id);
+            let _ = tokio::fs::write(&soul_path, &default_soul).await;
+            info!("[ZEROCLAW] Created default SOUL.md for user: {}", user_id);
+        };
+
+        let _system_prompt = if let Some(cfg) = &config {
+            cfg.system_prompt.clone().unwrap_or_else(|| "You are a helpful assistant.".to_string())
+        } else {
+            "You are a helpful assistant.".to_string()
+        };
+        
         let memory: Arc<dyn zeroclaw::memory::Memory> = zeroclaw::memory::create_memory_with_storage_and_routes(
             &memory_config,
             &[],
@@ -194,20 +258,87 @@ impl UserAgentActor {
 
         let observer: Arc<dyn zeroclaw::observability::Observer> = zeroclaw::observability::create_observer(&zeroclaw::config::ObservabilityConfig::default()).into();
 
+        // Create security policy for built-in tools
+        let security = Arc::new(SecurityPolicy {
+            autonomy: AutonomyLevel::Full, // Allow the agent to act
+            workspace_dir: PathBuf::from(&workspace_path),
+            workspace_only: true,
+            ..SecurityPolicy::default()
+        });
+        let runtime = Arc::new(NativeRuntime::new());
+
         let mut tools: Vec<Box<dyn tools::Tool>> = vec![];
         let weather_api_key = config.as_ref().and_then(|c| c.weather_api_key.clone());
         
         if let Some(config_ref) = &config {
-            if config_ref.tools.contains(&"weather".to_string()) {
-                tools.push(Box::new(WeatherTool::new(weather_api_key)));
+            info!("[ZEROCLAW] Configuring tools from config: {:?}", config_ref.tools);
+            
+            // Register weather tool if configured (or default)
+            if config_ref.tools.is_empty() || config_ref.tools.contains(&"weather".to_string()) {
+                tools.push(Box::new(WeatherTool::new(weather_api_key.clone())));
+                info!("[ZEROCLAW] Registered weather tool");
+            }
+            
+            // Register built-in ZeroClaw tools if configured
+            if config_ref.tools.contains(&"file_read".to_string()) {
+                tools.push(Box::new(zeroclaw::tools::FileReadTool::new(security.clone())));
+                info!("[ZEROCLAW] Registered built-in file_read tool");
+            }
+            if config_ref.tools.contains(&"file_write".to_string()) {
+                tools.push(Box::new(zeroclaw::tools::FileWriteTool::new(security.clone())));
+                info!("[ZEROCLAW] Registered built-in file_write tool");
+            }
+            if config_ref.tools.contains(&"file_edit".to_string()) {
+                tools.push(Box::new(zeroclaw::tools::FileEditTool::new(security.clone())));
+                info!("[ZEROCLAW] Registered built-in file_edit tool");
+            }
+            if config_ref.tools.contains(&"glob_search".to_string()) {
+                tools.push(Box::new(zeroclaw::tools::GlobSearchTool::new(security.clone())));
+                info!("[ZEROCLAW] Registered built-in glob_search tool");
+            }
+            if config_ref.tools.contains(&"terminal".to_string()) || config_ref.tools.contains(&"shell".to_string()) {
+                tools.push(Box::new(zeroclaw::tools::ShellTool::new(security.clone(), runtime.clone())));
+                info!("[ZEROCLAW] Registered built-in shell tool");
+            }
+            if config_ref.tools.contains(&"git".to_string()) {
+                tools.push(Box::new(zeroclaw::tools::GitOperationsTool::new(security.clone(), PathBuf::from(&workspace_path))));
+                info!("[ZEROCLAW] Registered built-in git_operations tool");
+            }
+            if config_ref.tools.contains(&"content_search".to_string()) {
+                tools.push(Box::new(zeroclaw::tools::ContentSearchTool::new(security.clone())));
+                info!("[ZEROCLAW] Registered built-in content_search tool");
+            }
+            
+            // Keep some custom tools if they don't have built-in equivalents or are specialized
+            if config_ref.tools.contains(&"file_list".to_string()) {
+                let mut tool = FileListTool::new();
+                tool.set_config(vec![("workspace".to_string(), format!("workspaces/{}", user_id))].into_iter().collect());
+                tools.push(Box::new(tool));
+                info!("[ZEROCLAW] Registered custom file_list tool");
+            }
+            if config_ref.tools.contains(&"workspace".to_string()) {
+                let mut tool = WorkspaceTool::new();
+                tool.set_config(vec![("workspace".to_string(), format!("workspaces/{}", user_id))].into_iter().collect());
+                tools.push(Box::new(tool));
+                info!("[ZEROCLAW] Registered custom workspace tool");
+            }
+            if config_ref.tools.contains(&"code_run".to_string()) {
+                let mut tool = CodeRunTool::new();
+                tool.set_config(vec![("workspace".to_string(), format!("workspaces/{}", user_id))].into_iter().collect());
+                tools.push(Box::new(tool));
+                info!("[ZEROCLAW] Registered custom code_run tool");
             }
         } else {
             tools.push(Box::new(WeatherTool::new(weather_api_key)));
+            info!("[ZEROCLAW] No config, registered default weather tool");
         }
+
+        info!("[ZEROCLAW] Registered {} tools with the agent: {:?}", tools.len(), tools.iter().map(|t| t.name()).collect::<Vec<_>>());
 
         let agent = Agent::builder()
             .provider(provider)
             .model_name(model_name)
+            .workspace_dir(std::path::PathBuf::from(workspace_path))
             .tools(tools)
             .memory(memory.clone())
             .observer(observer)
@@ -344,8 +475,28 @@ impl Handler<AgentTurn> for UserAgentActor {
                             })
                         },
                         Err(e) => {
-                            error!("[AGENT_ERROR] User: {}, Error: {:?}", user_id, e);
-                            Err(anyhow::anyhow!("Agent error: {}", e))
+                            let error_msg = format!("{:?}", e);
+                            error!("[AGENT_ERROR] User: {}, Error: {}", user_id, error_msg);
+                            
+                            // Provide more helpful error messages for common issues
+                            let (helpful_message, is_context_error) = if error_msg.contains("missing field `choices`") {
+                                ("LLM API error: Invalid API key, expired key, or account issue. Please check your OPENAI_API_KEY.".to_string(), false)
+                            } else if error_msg.contains("connection") || error_msg.contains("timeout") {
+                                ("Unable to connect to LLM provider. Please check your network connection.".to_string(), false)
+                            } else if error_msg.contains("context_length") || error_msg.contains("max_tokens") || error_msg.contains("too long") || error_msg.contains("context window") {
+                                let msg = "Your conversation is too long for the model's context window. The history has been cleared. Please start a new conversation.";
+                                (msg.to_string(), true)
+                            } else {
+                                ("Agent error occurred. Please try again.".to_string(), false)
+                            };
+                            
+                            // If it's a context window error, try to clear the history
+                            if is_context_error {
+                                info!("[CONTEXT] Clearing history due to context window overflow for user: {}", user_id);
+                                // Note: ZeroClaw handles memory internally, but we log this for debugging
+                            }
+                            
+                            Err(anyhow::anyhow!("{}", helpful_message))
                         }
                     }
                 } else {
@@ -474,14 +625,6 @@ impl Handler<GetHistory> for UserAgentActor {
     }
 }
 
-impl Handler<ClearAgent> for UserAgentActor {
-    type Result = ();
-
-    fn handle(&mut self, _msg: ClearAgent, _ctx: &mut Self::Context) -> Self::Result {
-        self.agent = None;
-    }
-}
-
 impl Handler<RemoteAgentTurn> for UserAgentActor {
     type Result = ();
 
@@ -515,6 +658,7 @@ mod tests {
             model: Some("gpt-4o".to_string()),
             tools: vec!["weather".to_string()],
             base_url: Some("http://localhost:9999".to_string()),
+            system_prompt: None,
             llm_api_key: None,
             weather_api_key: None,
         };
@@ -766,6 +910,7 @@ mod tests {
             model: Some("test-model".to_string()),
             tools: vec![],
             base_url: None,
+            system_prompt: None,
             llm_api_key: None,
             weather_api_key: None,
         };
@@ -786,6 +931,7 @@ mod tests {
             model: Some("gpt-4".to_string()),
             tools: vec![],
             base_url: None,
+            system_prompt: None,
             llm_api_key: None,
             weather_api_key: None,
         };

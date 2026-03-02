@@ -90,10 +90,27 @@ This plan outlines the steps required to transition the project from its current
     - [x] Verify streaming endpoint returns chunked responses.
     - [ ] Test streaming across multiple nodes in cluster mode.
 
-## 8. Coding Agent Tools
-**Objective:** Extend the tool system to support code development workflows.
+## 8. Coding Agent Tools & Workspace Isolation
+**Objective:** Extend the tool system to support code development workflows and ensure secure, per-user workspace isolation with dedicated agent personas (Souls).
 
-- [ ] **Tool Architecture:**
+- [x] **Workspace Isolation & Initialization:**
+    - [x] Update `UserAgentActor::init_agent_async` to set a user-specific workspace directory (e.g., `workspaces/{user_id}`).
+    - [x] Ensure the workspace directory is created before the agent is initialized.
+    - [x] Update `ConfigureAgent` to allow user-defined parameters (e.g., `temperature`, `system_prompt`).
+- [ ] **Agent Soul Management:**
+    - [ ] Implement `Soul.md` (persona/personality) management in `UserAgentActor`.
+    - [ ] Create a default `Soul.md` for new agents in `memory/{user_id}/Soul.md`.
+    - [ ] Load `Soul.md` content and incorporate it into the agent's system prompt during initialization.
+    - [ ] Allow agents to update their own `Soul.md` (self-reflection/evolution).
+- [ ] **Workspace-Aware Coding Tools:**
+    - [ ] Refactor `FileReadTool`, `FileWriteTool`, `FileListTool`, `GitTool`, `TerminalTool`, and `CodeRunTool` to be workspace-aware.
+    - [ ] Ensure all tool operations are strictly confined to the agent's dedicated `workspaces/{user_id}` directory.
+    - [ ] Implement robust path validation to prevent directory traversal outside the workspace.
+- [ ] **Built-in ZeroClaw Tools Integration:**
+    - [ ] Integrate `FileSearchTool` for efficient workspace searching.
+    - [ ] Integrate `TerminalTool` (or `BashTool`) for command execution.
+    - [ ] Integrate `BrowserTool` for web research capabilities.
+- [ ] **Custom Tool Architecture:**
     - [ ] Create `src/coding_tools.rs` module for all coding-related tools.
     - [ ] Implement base `CodingTool` trait extending ZeroClaw's tool interface.
     - [ ] Add tool registration per-user to allow workspace-specific tools.
@@ -101,9 +118,7 @@ This plan outlines the steps required to transition the project from its current
     - [ ] Implement `FileReadTool`: read file contents with path validation (prevent directory traversal).
     - [ ] Implement `FileWriteTool`: create/update files with atomic writes and backup.
     - [ ] Implement `FileListTool`: list directory contents with filtering.
-    - [ ] Implement `FileSearchTool`: grep-like content search within workspace.
 - [ ] **Shell Execution:**
-    - [ ] Implement `BashTool`: execute shell commands with timeout support.
     - [ ] Add command allowlist/denylist configuration for security.
     - [ ] Implement stdout/stderr capture and streaming.
 - [ ] **Git Integration:**
@@ -114,8 +129,8 @@ This plan outlines the steps required to transition the project from its current
     - [ ] Implement `CodeRunTool`: execute code in isolated environment.
     - [ ] Support multiple languages: Python, Node.js, Rust (via `cargo-script` or similar).
     - [ ] Add resource limits (CPU, memory, execution time).
-- [ ] **Workspace Management:**
-    - [ ] Implement `WorkspaceTool`: create/clone/delete isolated workspaces per user.
+- [x] **Workspace Management:**
+    - [x] Implement `WorkspaceTool`: create/clone/delete isolated workspaces per user (Identified as a gap in Findings).
     - [ ] Add workspace templates for common project types.
     - [ ] Implement workspace state persistence across agent restarts.
 - [ ] **Testing:**

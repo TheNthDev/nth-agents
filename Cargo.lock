@@ -359,6 +359,7 @@ dependencies = [
  "dotenvy",
  "futures-util",
  "log",
+ "parking_lot",
  "regex",
  "reqwest",
  "serde",
