@@ -245,6 +245,9 @@
     <header>
         <h1>ZeroClaw Agents</h1>
         <div id="user-display">
+            <label id="stream-toggle" style="display:none; margin-right: 1rem;">
+                <input type="checkbox" id="stream-checkbox"> Streaming
+            </label>
             <span id="user-info"></span>
             <button id="config-btn" style="display:none; margin-left:1rem; padding: 0.4rem 0.8rem;">Settings</button>
             <button id="logout-btn" style="display:none; margin-left:1rem; padding: 0.4rem 0.8rem;">Logout</button>
@@ -353,6 +356,12 @@
         const weatherKeyGroup = document.getElementById('weather-key-group');
         const configTitle = document.getElementById('config-title');
         const configSubtitle = document.getElementById('config-subtitle');
+        const streamToggle = document.getElementById('stream-toggle');
+        const streamCheckbox = document.getElementById('stream-checkbox');
+
+        let ws = null;
+        let currentAgentMessage = null;
+        let wsConnected = false;
 
         providerSelect.addEventListener('change', () => {
             if (providerSelect.value === 'lmstudio') {
@@ -467,15 +476,96 @@
         });
 
         logoutBtn.addEventListener('click', () => {
+            if (ws) {
+                ws.close();
+                ws = null;
+                wsConnected = false;
+            }
             currentUserId = null;
             userInfo.textContent = '';
             logoutBtn.style.display = 'none';
             configBtn.style.display = 'none';
+            streamToggle.style.display = 'none';
             loginView.style.display = 'block';
             chatView.style.display = 'none';
             configView.style.display = 'none';
             messagesContainer.innerHTML = '<div class="message agent">Hello! I am your AI agent. How can I help you today?</div>';
         });
+
+        streamCheckbox.addEventListener('change', async () => {
+            if (streamCheckbox.checked) {
+                await connectWebSocket();
+            } else {
+                if (ws) {
+                    ws.close();
+                    ws = null;
+                    wsConnected = false;
+                }
+            }
+        });
+
+        async function connectWebSocket() {
+            if (!currentUserId) return;
+            
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/agent/${currentUserId}/stream`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                console.log('[WS] Connected');
+                wsConnected = true;
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const chunk = JSON.parse(event.data);
+                    if (chunk.done) {
+                        if (currentAgentMessage) {
+                            currentAgentMessage = null;
+                        }
+                    } else {
+                        if (!currentAgentMessage) {
+                            currentAgentMessage = {
+                                content: chunk.content,
+                                timestamp: chunk.timestamp,
+                                element: null
+                            };
+                            const div = document.createElement('div');
+                            div.className = 'message agent';
+                            const contentDiv = document.createElement('div');
+                            contentDiv.className = 'message-content';
+                            contentDiv.textContent = chunk.content;
+                            div.appendChild(contentDiv);
+                            
+                            const tsSpan = document.createElement('span');
+                            tsSpan.className = 'timestamp';
+                            tsSpan.textContent = chunk.timestamp;
+                            div.appendChild(tsSpan);
+                            
+                            messagesContainer.appendChild(div);
+                            currentAgentMessage.element = contentDiv;
+                        } else {
+                            currentAgentMessage.element.textContent += ' ' + chunk.content;
+                        }
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }
+                } catch (e) {
+                    console.error('[WS] Parse error:', e);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('[WS] Error:', error);
+                wsConnected = false;
+            };
+            
+            ws.onclose = () => {
+                console.log('[WS] Disconnected');
+                wsConnected = false;
+                streamCheckbox.checked = false;
+            };
+        }
 
         chatForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -486,6 +576,13 @@
             addMessage(message, 'user', userTimestamp);
             messageInput.value = '';
 
+            // Use WebSocket if streaming is enabled
+            if (wsConnected && ws && streamCheckbox.checked) {
+                ws.send(message);
+                return;
+            }
+
+            // Fallback to HTTP
             try {
                 const response = await fetch(`/agent/${currentUserId}/turn`, {
                     method: 'POST',
@@ -510,6 +607,7 @@
             userInfo.textContent = `User: ${userId}`;
             logoutBtn.style.display = 'inline-block';
             configBtn.style.display = 'inline-block';
+            streamToggle.style.display = 'inline-flex';
             loginView.style.display = 'none';
             configView.style.display = 'none';
             chatView.style.display = 'flex';

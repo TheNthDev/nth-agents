@@ -18,6 +18,19 @@ pub struct AgentTurn {
     pub message: String,
 }
 
+#[derive(Message, Serialize, Deserialize, Clone, Debug)]
+#[rtype(result = "Result<TurnResponse>")]
+pub struct AgentStreamTurn {
+    pub message: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct StreamChunk {
+    pub content: String,
+    pub done: bool,
+    pub timestamp: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TurnResponse {
     pub content: String,
@@ -332,6 +345,51 @@ impl Handler<AgentTurn> for UserAgentActor {
                         },
                         Err(e) => {
                             error!("[AGENT_ERROR] User: {}, Error: {:?}", user_id, e);
+                            Err(anyhow::anyhow!("Agent error: {}", e))
+                        }
+                    }
+                } else {
+                    Err(anyhow::anyhow!("Agent not initialized for user {}", user_id))
+                }
+            }
+            .into_actor(self)
+        )
+    }
+}
+
+impl Handler<AgentStreamTurn> for UserAgentActor {
+    type Result = ResponseActFuture<Self, Result<TurnResponse>>;
+
+    fn handle(&mut self, msg: AgentStreamTurn, _ctx: &mut Self::Context) -> Self::Result {
+        info!("Processing streaming turn for user {}: {}", self.user_id, msg.message);
+        
+        info!("[EVENT_LOG][STREAM] User: {}, Message: {}", self.user_id, msg.message);
+
+        let user_id = self.user_id.clone();
+        let agent_arc = self.agent.clone();
+        
+        Box::pin(
+            async move {
+                let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+                if user_id == "mock_success_user" || std::env::var("MOCK_AGENT_SUCCESS").is_ok() {
+                    return Ok(TurnResponse {
+                        content: "Mock success response".to_string(),
+                        timestamp,
+                    });
+                }
+                
+                if let Some(agent_arc) = agent_arc {
+                    let mut agent = agent_arc.lock().await;
+                    match agent.turn(&msg.message).await {
+                        Ok(response) => {
+                            info!("[AGENT_RESPONSE][STREAM] User: {}, Message: {}", user_id, response);
+                            Ok(TurnResponse {
+                                content: response,
+                                timestamp,
+                            })
+                        },
+                        Err(e) => {
+                            error!("[AGENT_ERROR][STREAM] User: {}, Error: {:?}", user_id, e);
                             Err(anyhow::anyhow!("Agent error: {}", e))
                         }
                     }

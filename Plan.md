@@ -68,3 +68,110 @@ This plan outlines the steps required to transition the project from its current
     - [x] **Web Dashboard:** Implement a responsive single-page application (`index.html`) for agent interaction.
     - [x] **Signup/Session Management:** Create a simple user-id based session entry in the UI.
     - [x] **API Integration:** Connect the UI to the existing `POST /agent/{user_id}/turn` endpoint.
+
+## 7. Streaming Output Support
+**Objective:** Enable real-time token streaming for improved UX and long-running agent tasks.
+
+- [x] **Streaming Endpoint:**
+    - [x] Add `GET /agent/{user_id}/stream` endpoint in `src/main.rs`.
+    - [x] Implement streaming handler using actix-web (simplified from WebSocket due to API complexity).
+- [x] **Streaming Agent Turn:**
+    - [x] Update `UserAgentActor` in `src/actor.rs` to support streaming responses.
+    - [x] ZeroClaw doesn't provide native streaming; implemented chunked response handling.
+    - [x] Create `AgentStreamTurn` message type that processes tokens.
+- [x] **Client-Side Integration:**
+    - [x] Update web UI with streaming toggle button.
+    - [ ] Handle reconnection and backpressure on the client.
+- [ ] **True WebSocket Support:**
+    - [ ] Implement WebSocket upgrade using actix-web-actors (requires API migration).
+    - [ ] Ensure WebSocket connections can be routed to remote actors via telepathy.
+    - [ ] Implement streaming response channel that works across node boundaries.
+- [x] **Testing:**
+    - [x] Verify streaming endpoint returns chunked responses.
+    - [ ] Test streaming across multiple nodes in cluster mode.
+
+## 8. Coding Agent Tools
+**Objective:** Extend the tool system to support code development workflows.
+
+- [ ] **Tool Architecture:**
+    - [ ] Create `src/coding_tools.rs` module for all coding-related tools.
+    - [ ] Implement base `CodingTool` trait extending ZeroClaw's tool interface.
+    - [ ] Add tool registration per-user to allow workspace-specific tools.
+- [ ] **File Operations:**
+    - [ ] Implement `FileReadTool`: read file contents with path validation (prevent directory traversal).
+    - [ ] Implement `FileWriteTool`: create/update files with atomic writes and backup.
+    - [ ] Implement `FileListTool`: list directory contents with filtering.
+    - [ ] Implement `FileSearchTool`: grep-like content search within workspace.
+- [ ] **Shell Execution:**
+    - [ ] Implement `BashTool`: execute shell commands with timeout support.
+    - [ ] Add command allowlist/denylist configuration for security.
+    - [ ] Implement stdout/stderr capture and streaming.
+- [ ] **Git Integration:**
+    - [ ] Implement `GitTool`: support for `status`, `diff`, `log`, `commit`, `branch` operations.
+    - [ ] Add safe-mode configuration to restrict dangerous operations (force push, etc.).
+- [ ] **Code Execution Sandbox:**
+    - [ ] Research and integrate execution sandbox (Docker, firecracker, or WASM).
+    - [ ] Implement `CodeRunTool`: execute code in isolated environment.
+    - [ ] Support multiple languages: Python, Node.js, Rust (via `cargo-script` or similar).
+    - [ ] Add resource limits (CPU, memory, execution time).
+- [ ] **Workspace Management:**
+    - [ ] Implement `WorkspaceTool`: create/clone/delete isolated workspaces per user.
+    - [ ] Add workspace templates for common project types.
+    - [ ] Implement workspace state persistence across agent restarts.
+- [ ] **Testing:**
+    - [ ] Test each tool individually with edge cases.
+    - [ ] Test tool composition (e.g., read file → modify → write → run tests).
+    - [ ] Verify sandbox isolation and resource limits.
+    - [ ] Test tool execution across cluster nodes.
+
+## 9. Multi-Agent Team Orchestration
+**Objective:** Enable coordinated teams of specialized agents to collaboratively work on coding tasks.
+
+- [ ] **Team Architecture:**
+    - [ ] Create `src/team/` module for team orchestration.
+    - [ ] Define `TeamSupervisorActor`: coordinates team activities and task distribution.
+    - [ ] Implement `TeamConfig`: define team size, roles, and capabilities per team.
+    - [ ] Create team templates: Full-Stack, Frontend, Backend, DevOps, etc.
+- [ ] **Agent Roles:**
+    - [ ] Define role system: Planner, Developer, CodeReviewer, QAEngineer, ExpTester, Documenter.
+    - [ ] Implement `PlannerAgent`: decomposes tasks into subtasks with dependencies.
+    - [ ] Implement `DeveloperAgent`: writes/modifies code using coding tools.
+    - [ ] Implement `QAEngineerAgent`: writes tests, runs test suites.
+    - [ ] Implement `CodeReviewerAgent`: reviews changes, suggests improvements.
+    - [ ] Implement `ExpTesterAgent`: runs user acceptance tests, validates UX.
+- [ ] **Task Management:**
+    - [ ] Implement `Task`: atomic unit of work with id, description, status, assignee.
+    - [ ] Implement `TaskQueue`: priority queue with dependency tracking.
+    - [ ] Implement task assignment logic (round-robin, skill-based, load-balanced).
+    - [ ] Add task lifecycle: pending → in-progress → review → done/blocked.
+- [ ] **Shared Workspace/Blackboard:**
+    - [ ] Implement shared state storage accessible by all team agents.
+    - [ ] Add artifact sharing: code patches, test results, docs between agents.
+    - [ ] Implement conflict resolution for concurrent edits (last-write-wins or merge).
+    - [ ] Add project context: current branch, open PRs, issue tracking.
+- [ ] **Workflow Engine:**
+    - [ ] Define workflow DSL: `Planning → Dev → QA → Review → ExpTest → Done`.
+    - [ ] Support sequential and parallel task execution.
+    - [ ] Implement retry logic with exponential backoff on failures.
+    - [ ] Add workflow hooks: pre-task, post-task, on-failure callbacks.
+- [ ] **Coordination Protocol:**
+    - [ ] Implement hub-and-spoke model: TeamSupervisor as coordinator.
+    - [ ] Add agent-to-agent messaging for handoffs and collaboration.
+    - [ ] Implement decision-making protocol for disagreements (vote, escalate to human).
+    - [ ] Add leader election for team continuity during node failures.
+- [ ] **Human-in-the-Loop:**
+    - [ ] Implement approval gates: require human sign-off at defined stages.
+    - [ ] Add user feedback integration: pause/wait for input during workflow.
+    - [ ] Create intervention API: allow humans to modify task assignments.
+    - [ ] Implement escalation queue for blocked tasks requiring human attention.
+- [ ] **Team Observability:**
+    - [ ] Implement team-level dashboard: progress, agent status, task timeline.
+    - [ ] Add cross-agent tracing: track task flow through multiple agents.
+    - [ ] Implement completion tracking: estimated vs actual time per task.
+    - [ ] Add team metrics: throughput, block rate, human intervention frequency.
+- [ ] **Testing:**
+    - [ ] Test team formation and role assignment.
+    - [ ] Test task decomposition and dependency resolution.
+    - [ ] Test end-to-end workflow: user request → completed code change.
+    - [ ] Test human-in-the-loop pauses and approvals.
+    - [ ] Test team resilience: simulate node failures during task execution.

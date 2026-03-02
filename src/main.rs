@@ -11,7 +11,7 @@ use actix_web::{web, App, HttpServer};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tracing::info;
-use handlers::{signup, agent_turn};
+use handlers::{signup, agent_turn, ws_stream};
 
 pub struct AppState {
     pub user_actors: Mutex<HashMap<String, Addr<UserAgentActor>>>,
@@ -50,6 +50,7 @@ async fn run_app() -> std::io::Result<()> {
             .route("/agent/{user_id}/config", web::get().to(crate::handlers::get_config))
             .route("/agent/{user_id}/config", web::post().to(crate::handlers::configure_agent))
             .route("/agent/{user_id}/turn", web::post().to(agent_turn))
+            .route("/agent/{user_id}/stream", web::get().to(ws_stream))
             .route("/agent/{user_id}/history", web::get().to(crate::handlers::get_history))
             .service(fs::Files::new("/", "./static").index_file("index.html"))
     })
