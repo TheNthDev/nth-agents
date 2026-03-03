@@ -7,6 +7,17 @@ use urlencoding::encode;
 // Import coding tools module
 pub mod coding_tools;
 
+// Re-export coding tools for convenient access
+pub use coding_tools::{
+    CodingTool, FileReadTool, FileWriteTool, FileListTool,
+    GitTool, TerminalTool, WorkspaceTool, CodeRunTool,
+    FileEditTool, GlobSearchTool, ContentSearchTool,
+    WebFetchTool, WebSearchTool, HttpRequestTool,
+    PdfReadTool, ImageInfoTool,
+};
+
+
+
 /// A simple weather tool to demonstrate LLM tool integration
 pub struct WeatherTool {
     api_key: Option<String>,

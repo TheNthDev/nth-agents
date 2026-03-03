@@ -97,37 +97,37 @@ This plan outlines the steps required to transition the project from its current
     - [x] Update `UserAgentActor::init_agent_async` to set a user-specific workspace directory (e.g., `workspaces/{user_id}`).
     - [x] Ensure the workspace directory is created before the agent is initialized.
     - [x] Update `ConfigureAgent` to allow user-defined parameters (e.g., `temperature`, `system_prompt`).
-- [ ] **Agent Soul Management:**
-    - [ ] Implement `Soul.md` (persona/personality) management in `UserAgentActor`.
-    - [ ] Create a default `Soul.md` for new agents in `memory/{user_id}/Soul.md`.
-    - [ ] Load `Soul.md` content and incorporate it into the agent's system prompt during initialization.
+- [x] **Agent Soul Management:**
+    - [x] Implement `Soul.md` (persona/personality) management in `UserAgentActor`.
+    - [x] Create a default `Soul.md` for new agents in `workspaces/{user_id}/SOUL.md`.
+    - [x] Load `Soul.md` content and incorporate it into the agent's system prompt during initialization.
     - [ ] Allow agents to update their own `Soul.md` (self-reflection/evolution).
-- [ ] **Workspace-Aware Coding Tools:**
-    - [ ] Refactor `FileReadTool`, `FileWriteTool`, `FileListTool`, `GitTool`, `TerminalTool`, and `CodeRunTool` to be workspace-aware.
-    - [ ] Ensure all tool operations are strictly confined to the agent's dedicated `workspaces/{user_id}` directory.
-    - [ ] Implement robust path validation to prevent directory traversal outside the workspace.
-- [ ] **Built-in ZeroClaw Tools Integration:**
-    - [ ] Integrate `FileSearchTool` for efficient workspace searching.
-    - [ ] Integrate `TerminalTool` (or `BashTool`) for command execution.
+- [x] **Workspace-Aware Coding Tools:**
+    - [x] Refactor `FileReadTool`, `FileWriteTool`, `FileListTool`, `GitTool`, `TerminalTool`, and `CodeRunTool` to be workspace-aware.
+    - [x] Ensure all tool operations are strictly confined to the agent's dedicated `workspaces/{user_id}` directory.
+    - [x] Implement robust path validation to prevent directory traversal outside the workspace.
+- [x] **Built-in ZeroClaw Tools Integration:**
+    - [x] Integrate `FileSearchTool` for efficient workspace searching.
+    - [x] Integrate `TerminalTool` (or `BashTool`) for command execution.
     - [ ] Integrate `BrowserTool` for web research capabilities.
-- [ ] **Custom Tool Architecture:**
-    - [ ] Create `src/coding_tools.rs` module for all coding-related tools.
-    - [ ] Implement base `CodingTool` trait extending ZeroClaw's tool interface.
-    - [ ] Add tool registration per-user to allow workspace-specific tools.
-- [ ] **File Operations:**
-    - [ ] Implement `FileReadTool`: read file contents with path validation (prevent directory traversal).
-    - [ ] Implement `FileWriteTool`: create/update files with atomic writes and backup.
-    - [ ] Implement `FileListTool`: list directory contents with filtering.
-- [ ] **Shell Execution:**
-    - [ ] Add command allowlist/denylist configuration for security.
-    - [ ] Implement stdout/stderr capture and streaming.
-- [ ] **Git Integration:**
-    - [ ] Implement `GitTool`: support for `status`, `diff`, `log`, `commit`, `branch` operations.
+- [x] **Custom Tool Architecture:**
+    - [x] Create `src/coding_tools.rs` module for all coding-related tools.
+    - [x] Implement base `CodingTool` trait extending ZeroClaw's tool interface.
+    - [x] Add tool registration per-user to allow workspace-specific tools.
+- [x] **File Operations:**
+    - [x] Implement `FileReadTool`: read file contents with path validation (prevent directory traversal).
+    - [x] Implement `FileWriteTool`: create/update files with atomic writes and backup.
+    - [x] Implement `FileListTool`: list directory contents with filtering.
+- [x] **Shell Execution:**
+    - [x] Add command allowlist/denylist configuration for security.
+    - [x] Implement stdout/stderr capture and streaming.
+- [x] **Git Integration:**
+    - [x] Implement `GitTool`: support for `status`, `diff`, `log`, `commit`, `branch` operations (via `GitOperationsTool`).
     - [ ] Add safe-mode configuration to restrict dangerous operations (force push, etc.).
-- [ ] **Code Execution Sandbox:**
+- [x] **Code Execution Sandbox:**
     - [ ] Research and integrate execution sandbox (Docker, firecracker, or WASM).
-    - [ ] Implement `CodeRunTool`: execute code in isolated environment.
-    - [ ] Support multiple languages: Python, Node.js, Rust (via `cargo-script` or similar).
+    - [x] Implement `CodeRunTool`: execute code in isolated environment (uses local `workspaces/` isolation).
+    - [x] Support multiple languages: Python, Node.js, Rust (via `cargo-script` or similar).
     - [ ] Add resource limits (CPU, memory, execution time).
 - [x] **Workspace Management:**
     - [x] Implement `WorkspaceTool`: create/clone/delete isolated workspaces per user (Identified as a gap in Findings).

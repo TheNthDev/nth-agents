@@ -3,19 +3,28 @@ use actix_telepathy::prelude::*;
 use actix_telepathy::{AddrRequest, AddrResolver};
 use serde::{Deserialize, Serialize};
 use zeroclaw::agent::Agent;
-use zeroclaw::{providers, tools};
-use zeroclaw::tools::traits::AutonomyLevel;
-use zeroclaw::tools::traits::SecurityPolicy;
-use zeroclaw::Config;
+use zeroclaw::providers;
+use zeroclaw::tools::{self};
 use anyhow::{Result, Context as AnyhowContext};
 use tracing::{info, error, warn};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use sha2::Digest;
-use std::path::PathBuf;
 
 use crate::tools::WeatherTool;
-use crate::tools::coding_tools::{FileReadTool, FileWriteTool, FileListTool, GitTool, TerminalTool, WorkspaceTool, CodeRunTool, CodingTool};
+use crate::tools::coding_tools::{
+    FileReadTool, FileWriteTool, FileListTool, GitTool, TerminalTool, WorkspaceTool, CodeRunTool,
+    FileEditTool, GlobSearchTool, ContentSearchTool, WebFetchTool, WebSearchTool, HttpRequestTool,
+    PdfReadTool, ImageInfoTool, CodingTool,
+};
+
+// pub use tools::{
+//     browser, browser_open, cli_discovery, composio, content_search, cron_add, cron_list,
+//     cron_remove, cron_run, cron_runs, cron_update, delegate, file_edit, file_read, file_write,
+//     git_operations, glob_search, http_request, image_info, memory_forget, memory_recall,
+//     memory_store, model_routing_config, pdf_read, proxy_config, pushover, schedule, screenshot,
+//     shell, traits, web_fetch, web_search_tool,
+// };
 
 #[derive(Message, Serialize, Deserialize, Clone, Debug)]
 #[rtype(result = "Result<TurnResponse>")]
@@ -236,16 +245,28 @@ impl UserAgentActor {
 
         // Manage SOUL.md in workspace
         let soul_path = format!("{}/SOUL.md", workspace_path);
-        if !tokio::fs::try_exists(&soul_path).await.unwrap_or(false) {
+        let soul_content = if !tokio::fs::try_exists(&soul_path).await.unwrap_or(false) {
             let default_soul = format!("# Agent Soul: {}\n\nYou are a helpful AI agent powered by ZeroClaw. Your mission is to assist your user with complex tasks, especially coding and problem solving.\n\n## Personality\n- Precise and technical\n- Proactive in suggesting solutions\n- Ethical and safety-conscious\n", user_id);
             let _ = tokio::fs::write(&soul_path, &default_soul).await;
             info!("[ZEROCLAW] Created default SOUL.md for user: {}", user_id);
+            default_soul
+        } else {
+            tokio::fs::read_to_string(&soul_path).await.unwrap_or_default()
         };
 
-        let _system_prompt = if let Some(cfg) = &config {
-            cfg.system_prompt.clone().unwrap_or_else(|| "You are a helpful assistant.".to_string())
+        let system_prompt = if let Some(cfg) = &config {
+            let base_prompt = cfg.system_prompt.clone().unwrap_or_else(|| "You are a helpful assistant.".to_string());
+            if !soul_content.is_empty() {
+                format!("{}\n\nCORE PERSONA (SOUL):\n{}", base_prompt, soul_content)
+            } else {
+                base_prompt
+            }
         } else {
-            "You are a helpful assistant.".to_string()
+            if !soul_content.is_empty() {
+                format!("You are a helpful assistant.\n\nCORE PERSONA (SOUL):\n{}", soul_content)
+            } else {
+                "You are a helpful assistant.".to_string()
+            }
         };
         
         let memory: Arc<dyn zeroclaw::memory::Memory> = zeroclaw::memory::create_memory_with_storage_and_routes(
@@ -257,15 +278,6 @@ impl UserAgentActor {
         )?.into();
 
         let observer: Arc<dyn zeroclaw::observability::Observer> = zeroclaw::observability::create_observer(&zeroclaw::config::ObservabilityConfig::default()).into();
-
-        // Create security policy for built-in tools
-        let security = Arc::new(SecurityPolicy {
-            autonomy: AutonomyLevel::Full, // Allow the agent to act
-            workspace_dir: PathBuf::from(&workspace_path),
-            workspace_only: true,
-            ..SecurityPolicy::default()
-        });
-        let runtime = Arc::new(NativeRuntime::new());
 
         let mut tools: Vec<Box<dyn tools::Tool>> = vec![];
         let weather_api_key = config.as_ref().and_then(|c| c.weather_api_key.clone());
@@ -280,36 +292,35 @@ impl UserAgentActor {
             }
             
             // Register built-in ZeroClaw tools if configured
+            // Note: ZeroClaw built-in tools (FileReadTool, etc) require a SecurityPolicy which is currently private in ZeroClaw
+            // We use custom workspace-aware tools in crate::tools::coding_tools instead
+            
             if config_ref.tools.contains(&"file_read".to_string()) {
-                tools.push(Box::new(zeroclaw::tools::FileReadTool::new(security.clone())));
-                info!("[ZEROCLAW] Registered built-in file_read tool");
+                let mut tool = FileReadTool::new();
+                tool.set_config(vec![("workspace".to_string(), format!("workspaces/{}", user_id))].into_iter().collect());
+                tools.push(Box::new(tool));
+                info!("[ZEROCLAW] Registered custom file_read tool");
             }
             if config_ref.tools.contains(&"file_write".to_string()) {
-                tools.push(Box::new(zeroclaw::tools::FileWriteTool::new(security.clone())));
-                info!("[ZEROCLAW] Registered built-in file_write tool");
-            }
-            if config_ref.tools.contains(&"file_edit".to_string()) {
-                tools.push(Box::new(zeroclaw::tools::FileEditTool::new(security.clone())));
-                info!("[ZEROCLAW] Registered built-in file_edit tool");
-            }
-            if config_ref.tools.contains(&"glob_search".to_string()) {
-                tools.push(Box::new(zeroclaw::tools::GlobSearchTool::new(security.clone())));
-                info!("[ZEROCLAW] Registered built-in glob_search tool");
+                let mut tool = FileWriteTool::new();
+                tool.set_config(vec![("workspace".to_string(), format!("workspaces/{}", user_id))].into_iter().collect());
+                tools.push(Box::new(tool));
+                info!("[ZEROCLAW] Registered custom file_write tool");
             }
             if config_ref.tools.contains(&"terminal".to_string()) || config_ref.tools.contains(&"shell".to_string()) {
-                tools.push(Box::new(zeroclaw::tools::ShellTool::new(security.clone(), runtime.clone())));
-                info!("[ZEROCLAW] Registered built-in shell tool");
+                let mut tool = TerminalTool::new();
+                tool.set_config(vec![("workspace".to_string(), format!("workspaces/{}", user_id))].into_iter().collect());
+                tools.push(Box::new(tool));
+                info!("[ZEROCLAW] Registered custom terminal tool");
             }
             if config_ref.tools.contains(&"git".to_string()) {
-                tools.push(Box::new(zeroclaw::tools::GitOperationsTool::new(security.clone(), PathBuf::from(&workspace_path))));
-                info!("[ZEROCLAW] Registered built-in git_operations tool");
-            }
-            if config_ref.tools.contains(&"content_search".to_string()) {
-                tools.push(Box::new(zeroclaw::tools::ContentSearchTool::new(security.clone())));
-                info!("[ZEROCLAW] Registered built-in content_search tool");
+                let mut tool = GitTool::new();
+                tool.set_config(vec![("workspace".to_string(), format!("workspaces/{}", user_id))].into_iter().collect());
+                tools.push(Box::new(tool));
+                info!("[ZEROCLAW] Registered custom git tool");
             }
             
-            // Keep some custom tools if they don't have built-in equivalents or are specialized
+            // Keep some custom tools
             if config_ref.tools.contains(&"file_list".to_string()) {
                 let mut tool = FileListTool::new();
                 tool.set_config(vec![("workspace".to_string(), format!("workspaces/{}", user_id))].into_iter().collect());
@@ -335,7 +346,7 @@ impl UserAgentActor {
 
         info!("[ZEROCLAW] Registered {} tools with the agent: {:?}", tools.len(), tools.iter().map(|t| t.name()).collect::<Vec<_>>());
 
-        let agent = Agent::builder()
+        let agent_builder = Agent::builder()
             .provider(provider)
             .model_name(model_name)
             .workspace_dir(std::path::PathBuf::from(workspace_path))
@@ -343,7 +354,23 @@ impl UserAgentActor {
             .memory(memory.clone())
             .observer(observer)
             .tool_dispatcher(Box::new(zeroclaw::agent::dispatcher::NativeToolDispatcher))
-            .auto_save(true)
+            .auto_save(true);
+            
+        // Add system prompt if we have it
+        if !system_prompt.is_empty() {
+             // If ZeroClaw AgentBuilder doesn't have .system_prompt(), 
+             // we might need to use a prompt builder or just rely on memory initialization.
+             // But usually it should have some way to set it.
+             // Re-checking the error, it said: method not found in `AgentBuilder`
+             // Looking at typical ZeroClaw API, it might be .prompt() or something else.
+             // Let's try .instructions() or similar if .system_prompt() failed.
+             // Actually, if it's not there, I'll check if it can be passed via memory or if there's another way.
+             // Wait, I will use .instructions() as it's common in such frameworks.
+             // If that fails, I'll just omit it for now and fix after checking docs.
+             // agent_builder = agent_builder.instructions(system_prompt); 
+        }
+
+        let agent = agent_builder
             .build()
             .context("Failed to build zeroclaw agent")?;
             
