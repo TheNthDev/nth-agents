@@ -7,18 +7,25 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
-            --primary: #4a90e2;
-            --bg: #f5f7fa;
-            --text: #333;
+            --primary: #58a6ff;
+            --bg: #1e1e1e;
+            --text: #d4d4d4;
             --white: #ffffff;
-            --border: #ddd;
-            --thought-bg: #fdf6e3;
-            --thought-border: #eee8d5;
-            --code-bg: #2d2d2d;
-            --code-text: #ccc;
+            --border: #3c3c3c;
+            --thought-bg: #2d2d30;
+            --thought-border: #3e3e42;
+            --code-bg: #1e1e1e;
+            --code-text: #9cdcfe;
+            --user-msg-bg: #094771;
+            --agent-msg-bg: #1e1e1e;
+            --terminal-green: #4ec9b0;
+            --terminal-blue: #569cd6;
+            --terminal-yellow: #dcdcaa;
+            --terminal-red: #f44747;
+            --terminal-orange: #ce9178;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
             background-color: var(--bg);
             color: var(--text);
             margin: 0;
@@ -27,41 +34,44 @@
             min-height: 100vh;
         }
         header {
-            background-color: var(--white);
-            padding: 1rem 2rem;
+            background-color: #252526;
+            padding: 0.8rem 1.5rem;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
         }
         .container {
             display: flex;
             flex-direction: column;
-            max-width: 900px;
-            margin: 2rem auto;
+            max-width: 950px;
+            margin: 1rem auto;
             width: 100%;
-            background: var(--white);
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            background: var(--bg);
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
         }
         #login-view, #config-view {
             padding: 2rem;
-            text-align: center;
+            text-align: left;
         }
         #config-view {
             display: none;
         }
         .form-group {
-            margin-bottom: 1rem;
+            margin-bottom: 1.2rem;
             text-align: left;
-            max-width: 400px;
+            max-width: 500px;
             margin-left: auto;
             margin-right: auto;
         }
         .form-group label {
             display: block;
-            margin-bottom: 0.3rem;
+            margin-bottom: 0.4rem;
             font-weight: 600;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
         }
         .form-group select, .form-group input {
             width: 100%;
@@ -69,11 +79,15 @@
             border: 1px solid var(--border);
             border-radius: 4px;
             box-sizing: border-box;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
         }
         .checkbox-group {
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
         }
         .checkbox-group input {
             width: auto;
@@ -89,42 +103,43 @@
             border-bottom: 1px solid var(--border);
             display: flex;
             flex-direction: column;
-            gap: 1.5rem;
+            gap: 1rem;
             height: 500px;
             overflow-y: auto;
         }
         .message {
             max-width: 90%;
-            padding: 1rem;
-            border-radius: 1rem;
+            padding: 0.8rem 1rem;
+            border-radius: 0;
             line-height: 1.5;
             position: relative;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
         }
         .message.user {
             align-self: flex-end;
-            background-color: var(--primary);
-            color: white;
-            border-bottom-right-radius: 0.2rem;
+            background-color: var(--user-msg-bg);
+            color: var(--text);
+            border-bottom-right-radius: 0;
+            border: 1px solid var(--border);
         }
         .message.agent {
             align-self: flex-start;
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-bottom-left-radius: 0.2rem;
+            background-color: var(--agent-msg-bg);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 0;
         }
         .message .timestamp {
             display: block;
-            font-size: 0.7rem;
-            margin-top: 0.5rem;
-            opacity: 0.7;
+            font-size: 0.65rem;
+            margin-top: 0.4rem;
+            opacity: 0.6;
+            color: var(--terminal-green);
         }
         .message.user .timestamp {
             text-align: right;
-            color: #eee;
         }
         .message.agent .timestamp {
             text-align: left;
-            color: #666;
         }
         
         /* Markdown Styling */
@@ -167,21 +182,21 @@
         .thought-block {
             background-color: var(--thought-bg);
             border: 1px solid var(--thought-border);
-            border-radius: 6px;
+            border-radius: 4px;
             padding: 0.8rem;
             margin: 0.5rem 0;
             font-style: italic;
-            color: #657b83;
-            font-size: 0.95rem;
+            color: var(--terminal-yellow);
+            font-size: 0.9rem;
         }
         .thought-block::before {
-            content: "Thought Process";
+            content: ">";
             display: block;
             font-weight: bold;
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             text-transform: uppercase;
             margin-bottom: 0.4rem;
-            color: #93a1a1;
+            color: var(--terminal-green);
             font-style: normal;
         }
         
@@ -189,19 +204,21 @@
             background-color: var(--code-bg);
             color: var(--code-text);
             padding: 1rem;
-            border-radius: 6px;
+            border-radius: 4px;
             overflow-x: auto;
             margin: 0.8rem 0;
-            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-            font-size: 0.9rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.85rem;
+            border: 1px solid var(--border);
         }
         
         code {
-            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-            background-color: rgba(0,0,0,0.05);
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            background-color: rgba(90, 166, 255, 0.1);
             padding: 0.2rem 0.4rem;
             border-radius: 3px;
             font-size: 0.9em;
+            color: var(--terminal-blue);
         }
         
         pre code {
@@ -210,34 +227,107 @@
         }
 
         .input-area {
-            padding: 1.5rem;
+            padding: 1rem;
             display: flex;
             gap: 0.8rem;
+            background-color: #252526;
+            border-top: 1px solid var(--border);
         }
         input[type="text"] {
             flex: 1;
             padding: 0.8rem 1rem;
             border: 1px solid var(--border);
-            border-radius: 25px;
+            border-radius: 4px;
             outline: none;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+        input[type="text"]:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
         }
         button {
-            padding: 0.8rem 1.5rem;
+            padding: 0.7rem 1.5rem;
             background-color: var(--primary);
             color: white;
             border: none;
-            border-radius: 25px;
+            border-radius: 4px;
             cursor: pointer;
             font-weight: 600;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
             transition: all 0.2s;
         }
         button:hover {
             opacity: 0.9;
-            transform: translateY(-1px);
+        }
+        button:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
         }
         #user-info {
             font-weight: bold;
+        }
+        
+        /* Dark mode toggle */
+        #theme-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: all 0.3s;
+        }
+        #theme-toggle:hover {
+            transform: scale(1.1);
+        }
+        #theme-toggle.active {
+            background-color: var(--terminal-green);
+        }
+
+        /* Terminal-style status bar */
+        .status-bar {
+            background-color: #007acc;
+            color: white;
+            padding: 0.3rem 1rem;
+            font-size: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+
+        /* Markdown code blocks with syntax highlighting colors */
+        .message-content pre code {
+            display: block;
+            overflow-x: auto;
+            padding: 0;
+        }
+        .message-content :not(pre) > code {
+            background-color: rgba(90, 166, 255, 0.15);
+        }
+
+        /* Thought block styling */
+        .thought-block {
+            border-left: 3px solid var(--terminal-green);
+        }
+
+        /* User message accent */
+        .message.user::before {
+            content: "";
+        }
+        .message.user::after {
+            content: "";
         }
     </style>
 </head>
@@ -252,6 +342,7 @@
             <button id="config-btn" style="display:none; margin-left:1rem; padding: 0.4rem 0.8rem;">Settings</button>
             <button id="clear-history-btn" style="display:none; margin-left:1rem; padding: 0.4rem 0.8rem; background-color: #e74c3c;">Clear History</button>
             <button id="logout-btn" style="display:none; margin-left:1rem; padding: 0.4rem 0.8rem;">Logout</button>
+            <button id="theme-toggle" title="Toggle Dark Mode">🌙</button>
         </div>
     </header>
 
@@ -281,6 +372,7 @@
                     <option value="anthropic">Anthropic</option>
                     <option value="gemini">Google Gemini</option>
                     <option value="xai">xAI (Grok)</option>
+                    <option value="bedrock">Amazon Bedrock</option>
                     <option value="lmstudio">LMStudio (Local)</option>
                     <option value="synthetic">Synthetic (Mock)</option>
                 </select>
@@ -336,6 +428,38 @@
                     <input type="checkbox" id="tool-code-run">
                     <label for="tool-code-run">Code Run</label>
                 </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-file-edit">
+                    <label for="tool-file-edit">File Edit</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-glob-search">
+                    <label for="tool-glob-search">Glob Search</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-content-search">
+                    <label for="tool-content-search">Content Search</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-web-fetch">
+                    <label for="tool-web-fetch">Web Fetch</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-web-search">
+                    <label for="tool-web-search">Web Search</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-http-request">
+                    <label for="tool-http-request">HTTP Request</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-pdf-read">
+                    <label for="tool-pdf-read">PDF Read</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-image-info">
+                    <label for="tool-image-info">Image Info</label>
+                </div>
             </div>
 
             <div class="form-group" id="weather-key-group">
@@ -387,6 +511,14 @@
         const toolTerminal = document.getElementById('tool-terminal');
         const toolWorkspace = document.getElementById('tool-workspace');
         const toolCodeRun = document.getElementById('tool-code-run');
+        const toolFileEdit = document.getElementById('tool-file-edit');
+        const toolGlobSearch = document.getElementById('tool-glob-search');
+        const toolContentSearch = document.getElementById('tool-content-search');
+        const toolWebFetch = document.getElementById('tool-web-fetch');
+        const toolWebSearch = document.getElementById('tool-web-search');
+        const toolHttpRequest = document.getElementById('tool-http-request');
+        const toolPdfRead = document.getElementById('tool-pdf-read');
+        const toolImageInfo = document.getElementById('tool-image-info');
         const baseUrlInput = document.getElementById('base-url-input');
         const baseUrlGroup = document.getElementById('base-url-group');
         const llmKeyInput = document.getElementById('llm-key-input');
@@ -396,6 +528,7 @@
         const configSubtitle = document.getElementById('config-subtitle');
         const streamToggle = document.getElementById('stream-toggle');
         const streamCheckbox = document.getElementById('stream-checkbox');
+        const themeToggle = document.getElementById('theme-toggle');
 
         let ws = null;
         let currentAgentMessage = null;
@@ -410,6 +543,9 @@
             } else if (providerSelect.value === 'xai') {
                 baseUrlGroup.style.display = 'none';
                 modelInput.value = 'grok-beta';
+            } else if (providerSelect.value === 'bedrock') {
+                baseUrlGroup.style.display = 'none';
+                modelInput.value = 'amazon.titan-text-express-v1';
             } else {
                 baseUrlGroup.style.display = 'none';
             }
@@ -418,6 +554,22 @@
         toolWeather.addEventListener('change', () => {
             weatherKeyGroup.style.display = toolWeather.checked ? 'block' : 'none';
         });
+
+        // Dark mode toggle
+        themeToggle.addEventListener('click', () => {
+            themeToggle.classList.toggle('active');
+            const isDark = themeToggle.classList.contains('active');
+            themeToggle.textContent = isDark ? '☀️' : '🌙';
+            // Persist preference
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        });
+
+        // Load saved theme preference
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'light') {
+            themeToggle.classList.add('active');
+            themeToggle.textContent = '☀️';
+        }
 
         let currentUserId = null;
 
@@ -462,7 +614,9 @@
                         const config = await response.json();
                         providerSelect.value = config.provider === 'openai' && config.base_url ? 'lmstudio' : config.provider;
                         modelInput.value = config.model;
-                        baseUrlInput.value = config.base_url || 'http://localhost:1234/v1';
+                        if (config.base_url) {
+                            baseUrlInput.value = config.base_url;
+                        }
                         llmKeyInput.value = config.llm_api_key || '';
                         weatherKeyInput.value = config.weather_api_key || '';
                         toolWeather.checked = config.tools.includes('weather');
@@ -473,6 +627,14 @@
                         toolTerminal.checked = config.tools.includes('terminal');
                         toolWorkspace.checked = config.tools.includes('workspace');
                         toolCodeRun.checked = config.tools.includes('code_run');
+                        toolFileEdit.checked = config.tools.includes('file_edit');
+                        toolGlobSearch.checked = config.tools.includes('glob_search');
+                        toolContentSearch.checked = config.tools.includes('content_search');
+                        toolWebFetch.checked = config.tools.includes('web_fetch');
+                        toolWebSearch.checked = config.tools.includes('web_search');
+                        toolHttpRequest.checked = config.tools.includes('http_request');
+                        toolPdfRead.checked = config.tools.includes('pdf_read');
+                        toolImageInfo.checked = config.tools.includes('image_info');
                         providerSelect.dispatchEvent(new Event('change'));
                         toolWeather.dispatchEvent(new Event('change'));
                     }
@@ -503,6 +665,14 @@
             if (toolTerminal.checked) config.tools.push('terminal');
             if (toolWorkspace.checked) config.tools.push('workspace');
             if (toolCodeRun.checked) config.tools.push('code_run');
+            if (toolFileEdit.checked) config.tools.push('file_edit');
+            if (toolGlobSearch.checked) config.tools.push('glob_search');
+            if (toolContentSearch.checked) config.tools.push('content_search');
+            if (toolWebFetch.checked) config.tools.push('web_fetch');
+            if (toolWebSearch.checked) config.tools.push('web_search');
+            if (toolHttpRequest.checked) config.tools.push('http_request');
+            if (toolPdfRead.checked) config.tools.push('pdf_read');
+            if (toolImageInfo.checked) config.tools.push('image_info');
 
             try {
                 const response = await fetch(`/agent/${currentUserId}/config`, {

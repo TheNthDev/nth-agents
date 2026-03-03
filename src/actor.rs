@@ -9,7 +9,7 @@ use anyhow::{Result, Context as AnyhowContext};
 use tracing::{info, error, warn};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use sha2::Digest;
+
 
 use crate::tools::WeatherTool;
 use crate::tools::coding_tools::{
@@ -142,19 +142,7 @@ impl UserAgentActor {
         }
     }
 
-    fn get_config_hash(cfg: &ConfigureAgent) -> String {
-        let mut parts = Vec::new();
-        parts.push(cfg.provider.as_deref().unwrap_or("default").to_string());
-        parts.push(cfg.model.as_deref().unwrap_or("default").to_string());
-        let mut tools = cfg.tools.clone();
-        tools.sort();
-        parts.push(tools.join(","));
-        parts.push(cfg.base_url.as_deref().unwrap_or("none").to_string());
-        
-        let input = parts.join("|");
-        let digest = sha2::Sha256::digest(input.as_bytes());
-        format!("{:x}", digest)
-    }
+
 
     async fn init_agent_async(user_id: String, config: Option<ConfigureAgent>) -> Result<Arc<Mutex<Agent>>> {
         let mut config = config;
@@ -212,28 +200,12 @@ impl UserAgentActor {
         }
         .context(format!("Failed to create provider: {}", provider_name))?;
 
-        // Use stable config-sensitive memory namespace
-        let config_hash = if let Some(cfg) = &config {
-            Self::get_config_hash(cfg)
-        } else {
-            "default".to_string()
-        };
-
+        // Use a consistent memory namespace to preserve memories across configuration changes
         let memory_root = format!("memory/{}", user_id);
-        let hashed_memory_path = format!("{}/{}", memory_root, config_hash);
-        let legacy_memory_path = format!("{}/memory", memory_root);
+        let final_memory_path = memory_root.clone();
         
-        // Fallback/Migration: If hashed path doesn't exist but legacy memory does,
-        // we use the legacy path to preserve history across the update.
-        // In a real system we might copy, but here we can just point to it.
-        let final_memory_path = if !tokio::fs::try_exists(&hashed_memory_path).await.unwrap_or(false) 
-            && tokio::fs::try_exists(&legacy_memory_path).await.unwrap_or(false) {
-            info!("Using legacy memory path for user: {}", user_id);
-            memory_root.clone()
-        } else {
-            let _ = tokio::fs::create_dir_all(&hashed_memory_path).await;
-            hashed_memory_path
-        };
+        // Ensure the memory directory exists
+        let _ = tokio::fs::create_dir_all(&final_memory_path).await;
 
         let mut memory_config = zeroclaw::config::MemoryConfig::default();
         memory_config.auto_save = true;
