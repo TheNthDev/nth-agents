@@ -783,6 +783,9 @@
                     const chunk = JSON.parse(event.data);
                     if (chunk.done) {
                         if (currentAgentMessage) {
+                            // Final render with markdown parsing
+                            currentAgentMessage.element.innerHTML = '';
+                            parseAndAppendContent(currentAgentMessage.element, currentAgentMessage.content);
                             currentAgentMessage = null;
                         }
                     } else {
@@ -807,7 +810,8 @@
                             messagesContainer.appendChild(div);
                             currentAgentMessage.element = contentDiv;
                         } else {
-                            currentAgentMessage.element.textContent += ' ' + chunk.content;
+                            currentAgentMessage.content += chunk.content;
+                            currentAgentMessage.element.textContent = currentAgentMessage.content;
                         }
                         messagesContainer.scrollTop = messagesContainer.scrollHeight;
                     }
