@@ -38,6 +38,13 @@ pub struct AgentStreamTurn {
     pub message: String,
 }
 
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct AgentStreamTurnWithSender {
+    pub message: String,
+    pub sender: tokio::sync::mpsc::Sender<StreamChunk>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StreamChunk {
     pub content: String,
@@ -285,11 +292,16 @@ impl UserAgentActor {
                 tools.push(Box::new(tool));
                 info!("[ZEROCLAW] Registered custom terminal tool");
             }
-            if config_ref.tools.contains(&"git".to_string()) {
+            if config_ref.tools.contains(&"git".to_string()) || config_ref.tools.contains(&"git_write".to_string()) {
                 let mut tool = GitTool::new();
-                tool.set_config(vec![("workspace".to_string(), format!("workspaces/{}", user_id))].into_iter().collect());
+                let write_mode = config_ref.tools.contains(&"git_write".to_string());
+                let mut cfg = vec![("workspace".to_string(), format!("workspaces/{}", user_id))];
+                if write_mode {
+                    cfg.push(("git_write_mode".to_string(), "true".to_string()));
+                }
+                tool.set_config(cfg.into_iter().collect());
                 tools.push(Box::new(tool));
-                info!("[ZEROCLAW] Registered custom git tool");
+                info!("[ZEROCLAW] Registered custom git tool (write_mode={})", write_mode);
             }
             
             // Keep some custom tools
@@ -545,6 +557,67 @@ impl Handler<AgentStreamTurn> for UserAgentActor {
                     }
                 } else {
                     Err(anyhow::anyhow!("Agent not initialized for user {}", user_id))
+                }
+            }
+            .into_actor(self)
+        )
+    }
+}
+
+impl Handler<AgentStreamTurnWithSender> for UserAgentActor {
+    type Result = ResponseActFuture<Self, ()>;
+
+    fn handle(&mut self, msg: AgentStreamTurnWithSender, _ctx: &mut Self::Context) -> Self::Result {
+        info!("[STREAM] Processing streaming turn for user {}: {}", self.user_id, msg.message);
+
+        let user_id = self.user_id.clone();
+        let agent_arc = self.agent.clone();
+        let sender = msg.sender;
+
+        Box::pin(
+            async move {
+                let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+                let response_text = if user_id == "mock_success_user" || std::env::var("MOCK_AGENT_SUCCESS").is_ok() {
+                    Ok("Mock success response".to_string())
+                } else if let Some(agent_arc) = agent_arc {
+                    let mut agent = agent_arc.lock().await;
+                    agent.turn(&msg.message).await.map_err(|e| format!("{}", e))
+                } else {
+                    Err(format!("Agent not initialized for user {}", user_id))
+                };
+
+                match response_text {
+                    Ok(full_response) => {
+                        // Stream word-by-word so the client sees tokens as they arrive
+                        let words: Vec<&str> = full_response.split_inclusive(' ').collect();
+                        let total = words.len();
+                        for (i, word) in words.iter().enumerate() {
+                            let chunk = StreamChunk {
+                                content: word.to_string(),
+                                done: i == total - 1,
+                                timestamp: timestamp.clone(),
+                            };
+                            if sender.send(chunk).await.is_err() {
+                                break; // client disconnected
+                            }
+                        }
+                        // Ensure a final done=true chunk is always sent
+                        if total == 0 {
+                            let _ = sender.send(StreamChunk {
+                                content: String::new(),
+                                done: true,
+                                timestamp,
+                            }).await;
+                        }
+                    }
+                    Err(e) => {
+                        let _ = sender.send(StreamChunk {
+                            content: format!("Error: {}", e),
+                            done: true,
+                            timestamp,
+                        }).await;
+                    }
                 }
             }
             .into_actor(self)

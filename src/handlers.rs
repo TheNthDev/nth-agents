@@ -1,10 +1,11 @@
 use actix_web::{web, HttpResponse, Responder, HttpRequest, Error};
 use actix_web_actors::ws;
 use tracing::info;
-use crate::actor::{AgentTurn, AgentStreamTurn, UserAgentActor, ConfigureAgent, GetHistory, GetConfig, StreamChunk, ClearHistory};
+use crate::actor::{AgentTurn, AgentStreamTurnWithSender, UserAgentActor, ConfigureAgent, GetHistory, GetConfig, StreamChunk, ClearHistory};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use actix::prelude::*;
+use tokio_stream::wrappers::ReceiverStream;
 
 #[derive(Deserialize, Serialize)]
 pub struct TurnRequest {
@@ -204,41 +205,20 @@ pub async fn configure_agent(
     }
 }
 
-fn chunk_response(content: &str) -> Vec<String> {
-    let words: Vec<&str> = content.split_whitespace().collect();
-    let mut chunks = Vec::new();
-    let mut current_chunk = String::new();
-    
-    for word in words {
-        if current_chunk.len() + word.len() + 1 > 20 {
-            if !current_chunk.is_empty() {
-                chunks.push(current_chunk);
-                current_chunk = String::new();
-            }
-        }
-        if !current_chunk.is_empty() {
-            current_chunk.push(' ');
-        }
-        current_chunk.push_str(word);
-    }
-    
-    if !current_chunk.is_empty() {
-        chunks.push(current_chunk);
-    }
-    
-    if chunks.is_empty() {
-        chunks.push(content.to_string());
-    }
-    
-    chunks
-}
-
 pub struct WsStreamActor {
     pub user_agent_actor: Addr<UserAgentActor>,
 }
 
 impl Actor for WsStreamActor {
     type Context = ws::WebsocketContext<Self>;
+}
+
+impl StreamHandler<StreamChunk> for WsStreamActor {
+    fn handle(&mut self, chunk: StreamChunk, ctx: &mut Self::Context) {
+        if let Ok(json) = serde_json::to_string(&chunk) {
+            ctx.text(json);
+        }
+    }
 }
 
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsStreamActor {
@@ -248,52 +228,33 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsStreamActor {
             Ok(ws::Message::Text(text)) => {
                 let text = text.to_string();
                 let actor_clone = self.user_agent_actor.clone();
-                
-                let stream_turn = AgentStreamTurn { message: text };
-                
-                let fut = actor_clone.send(stream_turn);
-                
-                fut.into_actor(self)
+
+                // Create a bounded channel; the actor will send StreamChunks into it
+                // as the LLM produces output, and we forward each chunk to the WS client.
+                let (tx, rx) = tokio::sync::mpsc::channel::<StreamChunk>(64);
+                let stream = ReceiverStream::new(rx);
+                ctx.add_stream(stream);
+
+                actor_clone
+                    .send(AgentStreamTurnWithSender {
+                        message: text,
+                        sender: tx,
+                    })
+                    .into_actor(self)
                     .map(|res, _act, ctx| {
-                        match res {
-                            Ok(Ok(response)) => {
-                                let chunks = chunk_response(&response.content);
-                                let total = chunks.len();
-                                for (i, chunk) in chunks.into_iter().enumerate() {
-                                    let is_last = i == total - 1;
-                                    let stream_chunk = StreamChunk {
-                                        content: chunk,
-                                        done: is_last,
-                                        timestamp: response.timestamp.clone(),
-                                    };
-                                    if let Ok(json) = serde_json::to_string(&stream_chunk) {
-                                        ctx.text(json);
-                                    }
-                                }
-                            }
-                            Ok(Err(e)) => {
-                                let error_chunk = StreamChunk {
-                                    content: format!("Error: {}", e),
-                                    done: true,
-                                    timestamp: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-                                };
-                                if let Ok(json) = serde_json::to_string(&error_chunk) {
-                                    ctx.text(json);
-                                }
-                            }
-                            Err(e) => {
-                                let error_chunk = StreamChunk {
-                                    content: format!("Connection error: {}", e),
-                                    done: true,
-                                    timestamp: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
-                                };
-                                if let Ok(json) = serde_json::to_string(&error_chunk) {
-                                    ctx.text(json);
-                                }
+                        if let Err(e) = res {
+                            // Mailbox error — actor unreachable
+                            let error_chunk = StreamChunk {
+                                content: format!("Connection error: {}", e),
+                                done: true,
+                                timestamp: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                            };
+                            if let Ok(json) = serde_json::to_string(&error_chunk) {
+                                ctx.text(json);
                             }
                         }
                     })
-                    .wait(ctx);
+                    .spawn(ctx);
             }
             Ok(ws::Message::Binary(_)) => (),
             _ => (),

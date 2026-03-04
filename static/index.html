@@ -414,7 +414,11 @@
                 </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="tool-git">
-                    <label for="tool-git">Git</label>
+                    <label for="tool-git">Git (read-only)</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="tool-git-write">
+                    <label for="tool-git-write">Git (write: commit, push, pull, merge)</label>
                 </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="tool-terminal">
@@ -508,6 +512,7 @@
         const toolFileWrite = document.getElementById('tool-file-write');
         const toolFileList = document.getElementById('tool-file-list');
         const toolGit = document.getElementById('tool-git');
+        const toolGitWrite = document.getElementById('tool-git-write');
         const toolTerminal = document.getElementById('tool-terminal');
         const toolWorkspace = document.getElementById('tool-workspace');
         const toolCodeRun = document.getElementById('tool-code-run');
@@ -624,6 +629,7 @@
                         toolFileWrite.checked = config.tools.includes('file_write');
                         toolFileList.checked = config.tools.includes('file_list');
                         toolGit.checked = config.tools.includes('git');
+                        toolGitWrite.checked = config.tools.includes('git_write');
                         toolTerminal.checked = config.tools.includes('terminal');
                         toolWorkspace.checked = config.tools.includes('workspace');
                         toolCodeRun.checked = config.tools.includes('code_run');
@@ -661,7 +667,8 @@
             if (toolFileRead.checked) config.tools.push('file_read');
             if (toolFileWrite.checked) config.tools.push('file_write');
             if (toolFileList.checked) config.tools.push('file_list');
-            if (toolGit.checked) config.tools.push('git');
+            if (toolGitWrite.checked) config.tools.push('git_write');
+            else if (toolGit.checked) config.tools.push('git');
             if (toolTerminal.checked) config.tools.push('terminal');
             if (toolWorkspace.checked) config.tools.push('workspace');
             if (toolCodeRun.checked) config.tools.push('code_run');
