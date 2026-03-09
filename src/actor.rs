@@ -86,10 +86,18 @@ impl Handler<ClearHistory> for UserAgentActor {
 
     fn handle(&mut self, _msg: ClearHistory, _ctx: &mut Self::Context) -> Self::Result {
         let user_id = self.user_id.clone();
+        let agent_arc = self.agent.clone();
         
         Box::pin(
             async move {
                 info!("[CLEAR] Clearing conversation history for user: {}", user_id);
+                
+                // Clear the in-memory agent history if agent exists
+                if let Some(agent_arc) = agent_arc {
+                    let mut agent = agent_arc.lock().await;
+                    agent.clear_history();
+                    info!("[CLEAR] Cleared in-memory agent history for user: {}", user_id);
+                }
                 
                 // Delete just the memory directory to clear history
                 let memory_path = format!("memory/{}", user_id);
@@ -128,6 +136,12 @@ pub struct ConfigureAgent {
     pub system_prompt: Option<String>,
     pub llm_api_key: Option<String>,
     pub weather_api_key: Option<String>,
+    #[serde(default = "default_max_tool_iterations")]
+    pub max_tool_iterations: usize,
+}
+
+fn default_max_tool_iterations() -> usize {
+    10
 }
 
 #[derive(Message, Serialize, Deserialize, Clone, Debug)]
@@ -330,6 +344,15 @@ impl UserAgentActor {
 
         info!("[ZEROCLAW] Registered {} tools with the agent: {:?}", tools.len(), tools.iter().map(|t| t.name()).collect::<Vec<_>>());
 
+        // Configure max_tool_iterations
+        let max_tool_iterations = config.as_ref()
+            .map(|c| c.max_tool_iterations)
+            .unwrap_or(10);
+        
+        let mut agent_config = zeroclaw::config::AgentConfig::default();
+        agent_config.max_tool_iterations = max_tool_iterations;
+        info!("[ZEROCLAW] Setting max_tool_iterations to {}", max_tool_iterations);
+
         let agent_builder = Agent::builder()
             .provider(provider)
             .model_name(model_name)
@@ -338,7 +361,8 @@ impl UserAgentActor {
             .memory(memory.clone())
             .observer(observer)
             .tool_dispatcher(Box::new(zeroclaw::agent::dispatcher::NativeToolDispatcher))
-            .auto_save(true);
+            .auto_save(true)
+            .config(agent_config);
             
         // Add system prompt if we have it
         if !system_prompt.is_empty() {
@@ -494,17 +518,17 @@ impl Handler<AgentTurn> for UserAgentActor {
                                 ("LLM API error: Invalid API key, expired key, or account issue. Please check your OPENAI_API_KEY.".to_string(), false)
                             } else if error_msg.contains("connection") || error_msg.contains("timeout") {
                                 ("Unable to connect to LLM provider. Please check your network connection.".to_string(), false)
-                            } else if error_msg.contains("context_length") || error_msg.contains("max_tokens") || error_msg.contains("too long") || error_msg.contains("context window") {
+                            } else if error_msg.contains("context_length") || error_msg.contains("max_tokens") || error_msg.contains("too long") || error_msg.contains("context window") || error_msg.contains("No user query found") {
                                 let msg = "Your conversation is too long for the model's context window. The history has been cleared. Please start a new conversation.";
                                 (msg.to_string(), true)
                             } else {
                                 ("Agent error occurred. Please try again.".to_string(), false)
                             };
                             
-                            // If it's a context window error, try to clear the history
+                            // If it's a context window error, clear the agent history
                             if is_context_error {
                                 info!("[CONTEXT] Clearing history due to context window overflow for user: {}", user_id);
-                                // Note: ZeroClaw handles memory internally, but we log this for debugging
+                                agent.clear_history();
                             }
                             
                             Err(anyhow::anyhow!("{}", helpful_message))
@@ -582,7 +606,20 @@ impl Handler<AgentStreamTurnWithSender> for UserAgentActor {
                     Ok("Mock success response".to_string())
                 } else if let Some(agent_arc) = agent_arc {
                     let mut agent = agent_arc.lock().await;
-                    agent.turn(&msg.message).await.map_err(|e| format!("{}", e))
+                    match agent.turn(&msg.message).await {
+                        Ok(response) => Ok(response),
+                        Err(e) => {
+                            let error_msg = format!("{:?}", e);
+                            // Check for context overflow errors and clear history
+                            if error_msg.contains("context_length") || error_msg.contains("max_tokens") || error_msg.contains("too long") || error_msg.contains("context window") || error_msg.contains("No user query found") {
+                                info!("[CONTEXT][STREAM] Clearing history due to context window overflow for user: {}", user_id);
+                                agent.clear_history();
+                                Err("Your conversation is too long for the model's context window. The history has been cleared. Please start a new conversation.".to_string())
+                            } else {
+                                Err(format!("{}", e))
+                            }
+                        }
+                    }
                 } else {
                     Err(format!("Agent not initialized for user {}", user_id))
                 };

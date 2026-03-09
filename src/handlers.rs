@@ -21,6 +21,12 @@ pub struct SignupRequest {
     pub system_prompt: Option<String>,
     pub llm_api_key: Option<String>,
     pub weather_api_key: Option<String>,
+    #[serde(default = "default_max_tool_iterations")]
+    pub max_tool_iterations: usize,
+}
+
+fn default_max_tool_iterations() -> usize {
+    10
 }
 
 pub async fn signup(
@@ -47,6 +53,7 @@ pub async fn signup(
         system_prompt: req.system_prompt.clone(),
         llm_api_key: req.llm_api_key.clone(),
         weather_api_key: req.weather_api_key.clone(),
+        max_tool_iterations: req.max_tool_iterations,
     };
 
     match addr.send(config_msg).await {
@@ -196,6 +203,7 @@ pub async fn configure_agent(
         system_prompt: req.system_prompt.clone(),
         llm_api_key: req.llm_api_key.clone(),
         weather_api_key: req.weather_api_key.clone(),
+        max_tool_iterations: req.max_tool_iterations,
     };
 
     match actor_addr.send(config_msg).await {

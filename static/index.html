@@ -182,7 +182,7 @@
         }
 
         /* Formatting types */
-        .thought-block {
+        think {
             background-color: var(--thought-bg);
             border: 1px solid var(--thought-border);
             border-radius: 4px;
@@ -191,13 +191,13 @@
             font-style: italic;
             color: var(--terminal-yellow);
             font-size: 0.9rem;
+            display: block;
         }
-        .thought-block::before {
-            content: ">";
+        think::before {
+            content: "think>";
             display: block;
             font-weight: bold;
             font-size: 0.8rem;
-            text-transform: uppercase;
             margin-bottom: 0.4rem;
             color: var(--terminal-green);
             font-style: normal;
@@ -475,6 +475,12 @@
                 <small style="color: #666;">Only needed if Weather Tool is enabled.</small>
             </div>
 
+            <div class="form-group">
+                <label for="max-tool-iterations-input">Max Tool Iterations</label>
+                <input type="number" id="max-tool-iterations-input" value="10" min="1" max="100" placeholder="10">
+                <small style="color: #666;">Maximum number of tool calls per turn (default: 10).</small>
+            </div>
+
             <div style="margin-top: 2rem;">
                 <button id="save-config-btn">Save Configuration</button>
                 <button id="cancel-config-btn" style="background-color: #ccc; margin-left: 1rem;">Cancel</button>
@@ -532,6 +538,7 @@
         const llmKeyInput = document.getElementById('llm-key-input');
         const weatherKeyInput = document.getElementById('weather-key-input');
         const weatherKeyGroup = document.getElementById('weather-key-group');
+        const maxToolIterationsInput = document.getElementById('max-tool-iterations-input');
         const configTitle = document.getElementById('config-title');
         const configSubtitle = document.getElementById('config-subtitle');
         const streamToggle = document.getElementById('stream-toggle');
@@ -627,6 +634,7 @@
                         }
                         llmKeyInput.value = config.llm_api_key || '';
                         weatherKeyInput.value = config.weather_api_key || '';
+                        maxToolIterationsInput.value = config.max_tool_iterations || 10;
                         toolWeather.checked = config.tools.includes('weather');
                         toolFileRead.checked = config.tools.includes('file_read');
                         toolFileWrite.checked = config.tools.includes('file_write');
@@ -664,7 +672,8 @@
                 tools: [],
                 base_url: providerSelect.value === 'lmstudio' ? baseUrlInput.value.trim() : null,
                 llm_api_key: llmKeyInput.value.trim() || null,
-                weather_api_key: weatherKeyInput.value.trim() || null
+                weather_api_key: weatherKeyInput.value.trim() || null,
+                max_tool_iterations: parseInt(maxToolIterationsInput.value) || 10
             };
             if (toolWeather.checked) config.tools.push('weather');
             if (toolFileRead.checked) config.tools.push('file_read');

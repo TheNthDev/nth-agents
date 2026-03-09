@@ -24,7 +24,7 @@ impl GitTool {
 
     fn is_allowed_command(&self, command: &str) -> bool {
         let read_commands = ["status", "diff", "log", "branch", "checkout", "add"];
-        let write_commands = ["commit", "push", "pull", "merge", "rebase", "stash"];
+        let write_commands = ["commit", "push", "pull", "merge", "rebase", "stash", "clone"];
         if read_commands.contains(&command) {
             return true;
         }
